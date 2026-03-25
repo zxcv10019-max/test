@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>✈ 旅遊行程</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;600;700&family=DM+Mono:wght@400;500&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --ink: #1a1209;
+    --paper: #f5f0e8;
+    --cream: #ede8dc;
+    --sand: #d4c9b0;
+    --rust: #c4622d;
+    --rust-light: #e07d4f;
+    --teal: #2a7c6f;
+    --teal-light: #3a9d8e;
+    --gold: #b8952a;
+    --ghost: rgba(26,18,9,0.06);
+    --shadow: 0 2px 20px rgba(26,18,9,0.12);
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Noto Serif TC', serif;
+    background: var(--paper);
+    color: var(--ink);
+    min-height: 100vh;
+    background-image:
+      radial-gradient(ellipse at 10% 20%, rgba(196,98,45,0.06) 0%, transparent 50%),
+      radial-gradient(ellipse at 90% 80%, rgba(42,124,111,0.06) 0%, transparent 50%);
+  }
+
+  /* ── HEADER ── */
+  header {
+    background: var(--ink);
+    color: var(--paper);
+    padding: 0 24px;
+    position: sticky; top: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 60px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+  }
+  .header-left { display: flex; align-items: center; gap: 14px; }
+  .header-logo {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.5rem; font-weight: 600; font-style: italic;
+    letter-spacing: 0.02em; color: var(--paper);
+  }
+  .sync-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #4caf50; animation: pulse 2s infinite;
+    transition: background 0.3s;
+  }
+  .sync-dot.offline { background: #f44336; animation: none; }
+  .sync-dot.syncing { background: var(--gold); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  .header-actions { display: flex; gap: 10px; }
+  .btn-add-day {
+    background: var(--rust); color: #fff;
+    border: none; border-radius: 8px;
+    padding: 7px 14px; font-size: 0.82rem;
+    font-family: 'Noto Serif TC', serif;
+    cursor: pointer; display: flex; align-items: center; gap: 6px;
+    transition: background 0.2s;
+  }
+  .btn-add-day:hover { background: var(--rust-light); }
+
+  /* ── DAY TABS ── */
+  .day-tabs {
+    display: flex; gap: 0; overflow-x: auto; padding: 0;
+    background: var(--cream); border-bottom: 2px solid var(--sand);
+    position: sticky; top: 60px; z-index: 90;
+    scrollbar-width: none;
+  }
+  .day-tabs::-webkit-scrollbar { display: none; }
+  .day-tab {
+    flex-shrink: 0; padding: 12px 22px;
+    font-family: 'DM Mono', monospace; font-size: 0.82rem;
+    cursor: pointer; border: none; background: transparent;
+    color: #888; border-bottom: 3px solid transparent;
+    margin-bottom: -2px; transition: all 0.2s;
+    position: relative;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .day-tab:hover { color: var(--ink); }
+  .day-tab.active {
+    color: var(--rust); border-bottom-color: var(--rust);
+    font-weight: 500;
+  }
+  .day-tab .tab-del {
+    opacity: 0; font-size: 0.7rem; color: #aaa;
+    transition: opacity 0.2s; cursor: pointer;
+    line-height: 1; padding: 2px 3px; border-radius: 3px;
+  }
+  .day-tab:hover .tab-del { opacity: 1; }
+  .day-tab .tab-del:hover { color: var(--rust); background: rgba(196,98,45,0.1); }
+
+  /* ── MAIN LAYOUT ── */
+  .main { max-width: 900px; margin: 0 auto; padding: 28px 16px 80px; }
+
+  /* ── DAY HEADER ── */
+  .day-header {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    margin-bottom: 24px; gap: 12px; flex-wrap: wrap;
+  }
+  .day-meta { flex: 1; }
+  .day-label {
+    font-family: 'DM Mono', monospace; font-size: 0.75rem;
+    color: var(--rust); letter-spacing: 0.1em; text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .day-title-input {
+    font-family: 'Cormorant Garamond', serif; font-size: 2rem; font-weight: 600;
+    background: transparent; border: none; border-bottom: 2px solid transparent;
+    color: var(--ink); width: 100%; outline: none;
+    transition: border-color 0.2s;
+  }
+  .day-title-input:focus { border-bottom-color: var(--sand); }
+  .day-city-input {
+    font-size: 0.9rem; background: transparent; border: none;
+    color: #888; width: 100%; outline: none; margin-top: 4px;
+    font-family: 'Noto Serif TC', serif;
+  }
+  .day-city-input::placeholder { color: #bbb; }
+  .btn-add-stop {
+    background: var(--teal); color: #fff;
+    border: none; border-radius: 8px;
+    padding: 9px 18px; font-size: 0.82rem;
+    font-family: 'Noto Serif TC', serif;
+    cursor: pointer; display: flex; align-items: center; gap: 6px;
+    transition: background 0.2s; white-space: nowrap;
+    height: fit-content;
+  }
+  .btn-add-stop:hover { background: var(--teal-light); }
+
+  /* ── TIMELINE ── */
+  .timeline { position: relative; }
+  .timeline::before {
+    content: ''; position: absolute; left: 36px; top: 0; bottom: 0;
+    width: 2px; background: linear-gradient(to bottom, var(--rust) 0%, var(--teal) 100%);
+    opacity: 0.3;
+  }
+
+  /* ── STOP CARD ── */
+  .stop-card {
+    display: flex; gap: 16px; margin-bottom: 20px;
+    animation: slideIn 0.3s ease;
+  }
+  @keyframes slideIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:none} }
+  .stop-time-col {
+    flex-shrink: 0; width: 72px; display: flex;
+    flex-direction: column; align-items: center; gap: 6px; padding-top: 14px;
+  }
+  .stop-dot {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--paper); border: 2px solid var(--rust);
+    flex-shrink: 0; z-index: 1; transition: background 0.2s;
+  }
+  .stop-card:hover .stop-dot { background: var(--rust); }
+  .stop-time-input {
+    font-family: 'DM Mono', monospace; font-size: 0.78rem;
+    color: var(--rust); background: transparent; border: none;
+    outline: none; text-align: center; width: 54px;
+  }
+  .stop-body {
+    flex: 1; background: #fff; border-radius: var(--radius);
+    padding: 16px 18px; box-shadow: var(--shadow);
+    border: 1px solid rgba(212,201,176,0.5);
+    transition: box-shadow 0.2s, border-color 0.2s;
+    position: relative;
+  }
+  .stop-body:hover { box-shadow: 0 4px 28px rgba(26,18,9,0.16); border-color: var(--sand); }
+  .stop-body-top {
+    display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;
+  }
+  .stop-name-input {
+    font-size: 1.05rem; font-weight: 600; font-family: 'Noto Serif TC', serif;
+    background: transparent; border: none; outline: none;
+    color: var(--ink); width: 100%;
+    border-bottom: 1px solid transparent; transition: border-color 0.2s;
+  }
+  .stop-name-input:focus { border-bottom-color: var(--sand); }
+  .stop-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .icon-btn {
+    width: 28px; height: 28px; border-radius: 6px;
+    background: transparent; border: 1px solid var(--sand);
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    font-size: 0.8rem; transition: all 0.15s; color: #888;
+  }
+  .icon-btn:hover { background: var(--ghost); color: var(--ink); }
+  .icon-btn.danger:hover { background: rgba(196,98,45,0.1); border-color: var(--rust); color: var(--rust); }
+  .stop-desc-input {
+    width: 100%; font-size: 0.85rem; color: #666; background: transparent;
+    border: none; outline: none; margin-top: 8px; resize: none;
+    font-family: 'Noto Serif TC', serif; min-height: 24px;
+    border-bottom: 1px solid transparent; transition: border-color 0.2s;
+    line-height: 1.5;
+  }
+  .stop-desc-input:focus { border-bottom-color: var(--sand); }
+  .stop-links { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .stop-link {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 5px 10px; border-radius: 20px; font-size: 0.76rem;
+    text-decoration: none; transition: all 0.2s; font-family: 'DM Mono', monospace;
+  }
+  .stop-link.maps {
+    background: rgba(42,124,111,0.1); color: var(--teal);
+    border: 1px solid rgba(42,124,111,0.25);
+  }
+  .stop-link.maps:hover { background: rgba(42,124,111,0.18); }
+  .stop-link-input {
+    flex: 1; min-width: 120px; font-size: 0.76rem; font-family: 'DM Mono', monospace;
+    background: rgba(42,124,111,0.06); border: 1px solid rgba(42,124,111,0.2);
+    border-radius: 20px; padding: 5px 10px; outline: none; color: var(--teal);
+    transition: border-color 0.2s;
+  }
+  .stop-link-input:focus { border-color: var(--teal); }
+
+  /* ── CREDENTIALS ── */
+  .creds-section {
+    margin-top: 40px; padding: 24px;
+    background: linear-gradient(135deg, rgba(184,149,42,0.07) 0%, rgba(196,98,45,0.05) 100%);
+    border-radius: var(--radius); border: 1px solid rgba(184,149,42,0.2);
+  }
+  .creds-title {
+    font-family: 'DM Mono', monospace; font-size: 0.75rem; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--gold); margin-bottom: 16px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .cred-item {
+    display: flex; gap: 10px; align-items: center; margin-bottom: 10px;
+    animation: slideIn 0.3s ease;
+  }
+  .cred-input {
+    flex: 1; font-size: 0.85rem; font-family: 'Noto Serif TC', serif;
+    background: #fff; border: 1px solid var(--sand);
+    border-radius: 8px; padding: 8px 12px; outline: none;
+    transition: border-color 0.2s;
+  }
+  .cred-input:focus { border-color: var(--gold); }
+  .cred-url-input {
+    flex: 1.5; font-size: 0.78rem; font-family: 'DM Mono', monospace;
+    background: #fff; border: 1px solid var(--sand);
+    border-radius: 8px; padding: 8px 12px; outline: none;
+    transition: border-color 0.2s;
+  }
+  .cred-url-input:focus { border-color: var(--gold); }
+  .cred-open {
+    padding: 8px 12px; background: var(--gold); color: #fff;
+    border: none; border-radius: 8px; cursor: pointer; font-size: 0.8rem;
+    text-decoration: none; white-space: nowrap; transition: opacity 0.2s;
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  .cred-open:hover { opacity: 0.85; }
+
+  /* ── INFO FOOTER ── */
+  .day-footer {
+    margin-top: 24px; padding: 16px 20px;
+    background: var(--cream); border-radius: var(--radius);
+    border: 1px solid var(--sand);
+  }
+  .day-footer label {
+    font-family: 'DM Mono', monospace; font-size: 0.72rem;
+    letter-spacing: 0.1em; text-transform: uppercase; color: #888;
+    display: block; margin-bottom: 4px;
+  }
+  .day-footer input, .day-footer textarea {
+    width: 100%; background: transparent; border: none;
+    border-bottom: 1px solid var(--sand); outline: none;
+    font-family: 'Noto Serif TC', serif; font-size: 0.88rem;
+    color: var(--ink); padding: 4px 0 6px; margin-bottom: 14px;
+  }
+
+  /* ── EMPTY STATE ── */
+  .empty-state {
+    text-align: center; padding: 60px 20px; color: #aaa;
+  }
+  .empty-state .empty-icon { font-size: 3rem; margin-bottom: 16px; opacity: 0.4; }
+  .empty-state p { font-size: 0.9rem; }
+
+  /* ── TOAST ── */
+  .toast {
+    position: fixed; bottom: 24px; right: 24px; z-index: 999;
+    background: var(--ink); color: var(--paper);
+    padding: 12px 20px; border-radius: 10px; font-size: 0.85rem;
+    font-family: 'DM Mono', monospace;
+    transform: translateY(80px); opacity: 0;
+    transition: all 0.3s; box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  }
+  .toast.show { transform: none; opacity: 1; }
+
+  /* ── MODAL ── */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(26,18,9,0.6);
+    z-index: 200; display: flex; align-items: center; justify-content: center;
+    padding: 16px; opacity: 0; pointer-events: none; transition: opacity 0.25s;
+  }
+  .modal-overlay.open { opacity: 1; pointer-events: all; }
+  .modal {
+    background: var(--paper); border-radius: 16px;
+    padding: 28px; max-width: 440px; width: 100%;
+    transform: translateY(20px); transition: transform 0.25s;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  }
+  .modal-overlay.open .modal { transform: none; }
+  .modal h3 {
+    font-family: 'Cormorant Garamond', serif; font-size: 1.5rem;
+    margin-bottom: 20px; color: var(--ink);
+  }
+  .modal-field { margin-bottom: 16px; }
+  .modal-field label {
+    display: block; font-family: 'DM Mono', monospace;
+    font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase;
+    color: #888; margin-bottom: 6px;
+  }
+  .modal-field input {
+    width: 100%; padding: 10px 14px;
+    border: 1px solid var(--sand); border-radius: 8px;
+    font-family: 'Noto Serif TC', serif; font-size: 0.9rem;
+    background: #fff; outline: none; transition: border-color 0.2s;
+  }
+  .modal-field input:focus { border-color: var(--teal); }
+  .modal-actions { display: flex; gap: 10px; margin-top: 24px; }
+  .btn-primary {
+    flex: 1; padding: 11px; background: var(--teal); color: #fff;
+    border: none; border-radius: 8px; font-family: 'Noto Serif TC', serif;
+    font-size: 0.9rem; cursor: pointer; transition: background 0.2s;
+  }
+  .btn-primary:hover { background: var(--teal-light); }
+  .btn-cancel {
+    padding: 11px 20px; background: transparent; color: #888;
+    border: 1px solid var(--sand); border-radius: 8px;
+    font-family: 'Noto Serif TC', serif; font-size: 0.9rem;
+    cursor: pointer; transition: all 0.2s;
+  }
+  .btn-cancel:hover { border-color: var(--ink); color: var(--ink); }
+
+  /* ── LOADING ── */
+  .loading {
+    display: flex; align-items: center; justify-content: center;
+    height: 200px; gap: 12px; color: #aaa; font-family: 'DM Mono', monospace;
+    font-size: 0.85rem;
+  }
+  .loading-dots span {
+    display: inline-block; animation: blink 1.2s infinite;
+    font-size: 1.5rem;
+  }
+  .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink { 0%,100%{opacity:0.2} 50%{opacity:1} }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 600px) {
+    header { padding: 0 14px; }
+    .header-logo { font-size: 1.2rem; }
+    .main { padding: 20px 10px 80px; }
+    .timeline::before { left: 28px; }
+    .stop-time-col { width: 56px; }
+    .stop-time-input { width: 46px; font-size: 0.72rem; }
+    .day-title-input { font-size: 1.5rem; }
+    .modal-actions { flex-direction: column; }
+    .btn-add-day span { display: none; }
+  }
+
+  /* ── DRAG HANDLE ── */
+  .drag-handle {
+    cursor: grab; color: var(--sand); font-size: 0.9rem;
+    padding: 0 2px; user-select: none;
+  }
+  .drag-handle:active { cursor: grabbing; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <div class="header-logo">✈ Journey</div>
+    <div class="sync-dot" id="syncDot" title="即時同步中"></div>
+    <span id="syncLabel" style="font-family:'DM Mono',monospace;font-size:0.72rem;color:#aaa;display:none;">同步中…</span>
+  </div>
+  <div class="header-actions">
+    <button class="btn-add-day" onclick="openAddDayModal()">
+      ＋ <span>新增天數</span>
+    </button>
+  </div>
+</header>
+
+<div class="day-tabs" id="dayTabs"></div>
+
+<main class="main" id="mainContent">
+  <div class="loading">
+    <div class="loading-dots"><span>•</span><span>•</span><span>•</span></div>
+    載入中
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<!-- Add Day Modal -->
+<div class="modal-overlay" id="addDayModal">
+  <div class="modal">
+    <h3>新增天數</h3>
+    <div class="modal-field">
+      <label>天數標題（例：Day 1）</label>
+      <input id="newDayLabel" placeholder="Day 1" />
+    </div>
+    <div class="modal-field">
+      <label>日期</label>
+      <input id="newDayDate" type="date" />
+    </div>
+    <div class="modal-field">
+      <label>城市 / 地點</label>
+      <input id="newDayCity" placeholder="東京、大阪…" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">取消</button>
+      <button class="btn-primary" onclick="addDay()">新增</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://mrvwugxkkkebmyxqrtpf.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_iMUuEhXDU_VnqaZpAJFLPg_hfw7fcNC';
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let trips = [];
+let activeId = null;
+let saveTimers = {};
+
+// ── INIT ──
+async function init() {
+  const dot = document.getElementById('syncDot');
+  try {
+    const { data, error } = await sb.from('trips').select('*').order('sort_order');
+    if (error) throw error;
+    trips = data || [];
+    renderTabs();
+    if (trips.length > 0) {
+      activeId = trips[0].id;
+      renderDay();
+    } else {
+      document.getElementById('mainContent').innerHTML =
+        `<div class="empty-state"><div class="empty-icon">🗺</div><p>還沒有行程，點右上角「新增天數」開始規劃吧！</p></div>`;
+    }
+    dot.classList.remove('offline');
+    subscribeRealtime();
+  } catch (e) {
+    dot.classList.add('offline');
+    dot.title = '連線失敗';
+    showToast('⚠ 連線失敗：' + e.message);
+    document.getElementById('mainContent').innerHTML =
+      `<div class="empty-state"><div class="empty-icon">⚠️</div><p>無法連線到資料庫，請確認網路與 Supabase 設定。</p></div>`;
+  }
+}
+
+// ── REALTIME ──
+function subscribeRealtime() {
+  sb.channel('trips-all')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'trips' }, payload => {
+      handleRealtimeChange(payload);
+    })
+    .subscribe(status => {
+      const dot = document.getElementById('syncDot');
+      if (status === 'SUBSCRIBED') {
+        dot.classList.remove('offline', 'syncing');
+        dot.title = '即時同步中';
+      } else {
+        dot.classList.add('syncing');
+      }
+    });
+}
+
+function handleRealtimeChange(payload) {
+  const { eventType, new: newRow, old: oldRow } = payload;
+  if (eventType === 'INSERT') {
+    if (!trips.find(t => t.id === newRow.id)) {
+      trips.push(newRow);
+      trips.sort((a, b) => a.sort_order - b.sort_order);
+    }
+  } else if (eventType === 'UPDATE') {
+    const idx = trips.findIndex(t => t.id === newRow.id);
+    if (idx >= 0) trips[idx] = newRow;
+  } else if (eventType === 'DELETE') {
+    trips = trips.filter(t => t.id !== oldRow.id);
+    if (activeId === oldRow.id) activeId = trips[0]?.id || null;
+  }
+  renderTabs();
+  if (activeId) renderDay();
+  else document.getElementById('mainContent').innerHTML =
+    `<div class="empty-state"><div class="empty-icon">🗺</div><p>還沒有行程，點右上角「新增天數」開始規劃吧！</p></div>`;
+}
+
+// ── TABS ──
+function renderTabs() {
+  const container = document.getElementById('dayTabs');
+  container.innerHTML = trips.map(t =>
+    `<button class="day-tab ${t.id === activeId ? 'active' : ''}" onclick="switchDay(${t.id})">
+      <span>${t.day || '未命名'}</span>
+      ${t.date ? `<span style="font-size:0.7rem;color:#bbb">${t.date}</span>` : ''}
+      <span class="tab-del" onclick="event.stopPropagation();deleteDay(${t.id})" title="刪除">✕</span>
+    </button>`
+  ).join('');
+}
+
+function switchDay(id) {
+  activeId = id;
+  renderTabs();
+  renderDay();
+}
+
+// ── RENDER DAY ──
+function renderDay() {
+  const trip = trips.find(t => t.id === activeId);
+  if (!trip) return;
+  const stops = Array.isArray(trip.stops) ? trip.stops : [];
+  const creds = Array.isArray(trip.creds) ? trip.creds : [];
+
+  document.getElementById('mainContent').innerHTML = `
+    <div class="day-header">
+      <div class="day-meta">
+        <div class="day-label">📅 ${trip.date || '設定日期'}</div>
+        <input class="day-title-input" value="${esc(trip.day || '')}" placeholder="第一天・東京" onchange="patchTrip(${trip.id},'day',this.value)">
+        <input class="day-city-input" value="${esc(trip.city || '')}" placeholder="城市 / 地區" onchange="patchTrip(${trip.id},'city',this.value)">
+      </div>
+      <button class="btn-add-stop" onclick="addStop(${trip.id})">＋ 新增地點</button>
+    </div>
+
+    <div class="timeline" id="timeline">
+      ${stops.map((s, i) => renderStopCard(trip.id, s, i, stops.length)).join('')}
+      ${stops.length === 0 ? `<div class="empty-state" style="padding:40px 0"><div class="empty-icon">📍</div><p>尚無地點，點「新增地點」加入行程</p></div>` : ''}
+    </div>
+
+    <div class="creds-section">
+      <div class="creds-title">
+        <span>🎫 憑證 / 訂單連結</span>
+        <button class="icon-btn" onclick="addCred(${trip.id})" style="font-size:0.9rem;color:var(--gold);border-color:var(--gold)">＋</button>
+      </div>
+      <div id="credsList">
+        ${creds.map((c, i) => renderCredItem(trip.id, c, i)).join('')}
+        ${creds.length === 0 ? `<p style="font-size:0.82rem;color:#bbb;font-family:'DM Mono',monospace">新增訂房、機票連結…</p>` : ''}
+      </div>
+    </div>
+
+    <div class="day-footer">
+      <label>🏨 住宿</label>
+      <input value="${esc(trip.hotel || '')}" placeholder="飯店名稱或地址" onchange="patchTrip(${trip.id},'hotel',this.value)">
+      <label>🚌 交通</label>
+      <input value="${esc(trip.transport || '')}" placeholder="交通方式備注" onchange="patchTrip(${trip.id},'transport',this.value)">
+      <label>📝 備注</label>
+      <textarea rows="2" placeholder="其他備注…" onchange="patchTrip(${trip.id},'itin',this.value)">${esc(trip.itin || '')}</textarea>
+    </div>
+  `;
+}
+
+function renderStopCard(tripId, stop, idx, total) {
+  return `
+  <div class="stop-card" id="stop-${idx}">
+    <div class="stop-time-col">
+      <input class="stop-time-input" value="${esc(stop.time || '')}" placeholder="09:00"
+        onchange="updateStop(${tripId}, ${idx}, 'time', this.value)">
+      <div class="stop-dot"></div>
+    </div>
+    <div class="stop-body">
+      <div class="stop-body-top">
+        <input class="stop-name-input" value="${esc(stop.name || '')}" placeholder="地點名稱"
+          onchange="updateStop(${tripId}, ${idx}, 'name', this.value)">
+        <div class="stop-actions">
+          <span class="drag-handle" title="拖曳排序">⠿</span>
+          ${stop.maps ? `<a href="${esc(stop.maps)}" target="_blank" class="icon-btn" title="開啟地圖">🗺</a>` : ''}
+          <button class="icon-btn danger" onclick="removeStop(${tripId}, ${idx})" title="刪除">✕</button>
+        </div>
+      </div>
+      <textarea class="stop-desc-input" rows="1" placeholder="描述、備注…"
+        onchange="updateStop(${tripId}, ${idx}, 'desc', this.value)"
+        oninput="autoGrow(this)">${esc(stop.desc || '')}</textarea>
+      <div class="stop-links">
+        <input class="stop-link-input" value="${esc(stop.maps || '')}" placeholder="Google Maps 連結"
+          onchange="updateStop(${tripId}, ${idx}, 'maps', this.value)">
+        ${stop.maps ? `<a href="${esc(stop.maps)}" target="_blank" class="stop-link maps">🗺 地圖</a>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderCredItem(tripId, cred, idx) {
+  return `
+  <div class="cred-item">
+    <input class="cred-input" value="${esc(cred.label || '')}" placeholder="名稱（機票、訂房…）"
+      onchange="updateCred(${tripId}, ${idx}, 'label', this.value)">
+    <input class="cred-url-input" value="${esc(cred.url || '')}" placeholder="連結 URL"
+      onchange="updateCred(${tripId}, ${idx}, 'url', this.value)">
+    ${cred.url ? `<a href="${esc(cred.url)}" target="_blank" class="cred-open">🔗 開啟</a>` : ''}
+    <button class="icon-btn danger" onclick="removeCred(${tripId}, ${idx})">✕</button>
+  </div>`;
+}
+
+// ── STOP CRUD ──
+function addStop(tripId) {
+  const trip = trips.find(t => t.id === tripId);
+  const stops = [...(trip.stops || [])];
+  stops.push({ time: '', name: '', desc: '', maps: '' });
+  patchTripJson(tripId, 'stops', stops);
+}
+
+function updateStop(tripId, idx, key, val) {
+  const trip = trips.find(t => t.id === tripId);
+  const stops = [...(trip.stops || [])];
+  stops[idx] = { ...stops[idx], [key]: val };
+  patchTripJson(tripId, 'stops', stops, true);
+}
+
+function removeStop(tripId, idx) {
+  const trip = trips.find(t => t.id === tripId);
+  const stops = [...(trip.stops || [])];
+  stops.splice(idx, 1);
+  patchTripJson(tripId, 'stops', stops);
+}
+
+// ── CRED CRUD ──
+function addCred(tripId) {
+  const trip = trips.find(t => t.id === tripId);
+  const creds = [...(trip.creds || [])];
+  creds.push({ label: '', url: '' });
+  patchTripJson(tripId, 'creds', creds);
+}
+
+function updateCred(tripId, idx, key, val) {
+  const trip = trips.find(t => t.id === tripId);
+  const creds = [...(trip.creds || [])];
+  creds[idx] = { ...creds[idx], [key]: val };
+  patchTripJson(tripId, 'creds', creds, true);
+}
+
+function removeCred(tripId, idx) {
+  const trip = trips.find(t => t.id === tripId);
+  const creds = [...(trip.creds || [])];
+  creds.splice(idx, 1);
+  patchTripJson(tripId, 'creds', creds);
+}
+
+// ── PATCH HELPERS ──
+function patchTrip(tripId, field, val) {
+  const trip = trips.find(t => t.id === tripId);
+  if (!trip) return;
+  trip[field] = val;
+  renderTabs();
+  debounceSave(tripId, { [field]: val });
+}
+
+function patchTripJson(tripId, field, val, debounce = false) {
+  const trip = trips.find(t => t.id === tripId);
+  if (!trip) return;
+  trip[field] = val;
+  renderDay();
+  if (debounce) debounceSave(tripId, { [field]: val });
+  else savePatch(tripId, { [field]: val });
+}
+
+function debounceSave(tripId, patch) {
+  clearTimeout(saveTimers[tripId]);
+  saveTimers[tripId] = setTimeout(() => savePatch(tripId, patch), 800);
+}
+
+async function savePatch(tripId, patch) {
+  setSyncing(true);
+  const { error } = await sb.from('trips').update(patch).eq('id', tripId);
+  setSyncing(false);
+  if (error) showToast('⚠ 儲存失敗：' + error.message);
+}
+
+function setSyncing(val) {
+  const dot = document.getElementById('syncDot');
+  const lbl = document.getElementById('syncLabel');
+  if (val) { dot.classList.add('syncing'); lbl.style.display = 'inline'; }
+  else { dot.classList.remove('syncing'); lbl.style.display = 'none'; }
+}
+
+// ── ADD DAY ──
+function openAddDayModal() {
+  document.getElementById('addDayModal').classList.add('open');
+  const n = trips.length + 1;
+  document.getElementById('newDayLabel').value = `Day ${n}`;
+  document.getElementById('newDayDate').value = '';
+  document.getElementById('newDayCity').value = '';
+}
+
+function closeModal() {
+  document.getElementById('addDayModal').classList.remove('open');
+}
+
+async function addDay() {
+  const day = document.getElementById('newDayLabel').value.trim() || `Day ${trips.length + 1}`;
+  const date = document.getElementById('newDayDate').value;
+  const city = document.getElementById('newDayCity').value.trim();
+  setSyncing(true);
+  const { data, error } = await sb.from('trips').insert({
+    day, date, city, stops: [], creds: [], sort_order: trips.length
+  }).select().single();
+  setSyncing(false);
+  if (error) { showToast('⚠ 新增失敗：' + error.message); return; }
+  trips.push(data);
+  activeId = data.id;
+  renderTabs();
+  renderDay();
+  closeModal();
+  showToast('✓ 已新增 ' + day);
+}
+
+async function deleteDay(tripId) {
+  const trip = trips.find(t => t.id === tripId);
+  if (!confirm(`確定刪除「${trip?.day || '此天'}」？`)) return;
+  setSyncing(true);
+  const { error } = await sb.from('trips').delete().eq('id', tripId);
+  setSyncing(false);
+  if (error) { showToast('⚠ 刪除失敗：' + error.message); return; }
+  trips = trips.filter(t => t.id !== tripId);
+  if (activeId === tripId) activeId = trips[0]?.id || null;
+  renderTabs();
+  if (activeId) renderDay();
+  else document.getElementById('mainContent').innerHTML =
+    `<div class="empty-state"><div class="empty-icon">🗺</div><p>還沒有行程，點右上角「新增天數」開始規劃吧！</p></div>`;
+  showToast('🗑 已刪除');
+}
+
+// ── UTILS ──
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function autoGrow(el) {
+  el.style.height = 'auto';
+  el.style.height = el.scrollHeight + 'px';
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ── MODAL CLOSE ON OVERLAY ──
+document.getElementById('addDayModal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+// ── START ──
+init();
+</script>
+</body>
+</html>
