@@ -1705,7 +1705,7 @@ body.force-admin-scroll #statsPage .log-table-wrap th{
 .outsource-toolbar{background:#fff;padding:10px 12px;border-bottom:1px solid #ccc;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .outsource-toolbar .os-hint{font-size:13px;color:#666;margin-right:auto}
 .outsource-wrap{margin:12px;background:#fff;border:1px solid #aaa;overflow:auto;max-height:calc(100vh - 170px)}
-.outsource-table{border-collapse:collapse!important;table-layout:fixed!important;width:max-content!important;min-width:1420px!important;font-size:13px}
+.outsource-table{border-collapse:collapse!important;table-layout:fixed!important;width:max-content!important;min-width:1600px!important;font-size:13px}
 .outsource-table th{background:#e8edf3!important;color:#111;padding:8px 5px;position:sticky!important;top:0!important;z-index:8!important;white-space:nowrap}
 .outsource-table td{padding:5px;border:1px solid #b7b7b7;background:#fff;vertical-align:middle}
 .outsource-table tbody tr:nth-child(even) td{background:#fffdf4}
@@ -1715,7 +1715,7 @@ body.force-admin-scroll #statsPage .log-table-wrap th{
 .outsource-table input[type="checkbox"]{width:18px;height:18px;accent-color:#f39c12;cursor:pointer}
 .outsource-table .os-center{text-align:center}
 .outsource-table .os-date{width:92px}.outsource-table .os-week{width:62px}.outsource-table .os-time{width:80px}.outsource-table .os-customer{width:160px}
-.outsource-table .os-city{width:78px}.outsource-table .os-district{width:80px}.outsource-table .os-vendor{width:115px}.outsource-table .os-check{width:62px}
+.outsource-table .os-city{width:78px}.outsource-table .os-district{width:80px}.outsource-table .os-address{width:260px}.outsource-table .os-vendor{width:115px}.outsource-table .os-check{width:62px}
 .outsource-table .os-shipdate{width:92px}.outsource-table .os-tracking{width:120px}.outsource-table .os-service{width:105px}.outsource-table .os-content{width:230px}.outsource-table .os-action{width:92px}
 .os-badge{display:inline-block;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:bold;white-space:nowrap;background:#eee;color:#333}
 .os-badge.vendor{background:#cfe2f3;color:#134f5c}.os-badge.service{background:#fff2cc;color:#7f6000}
@@ -1724,26 +1724,7 @@ body.force-admin-scroll #statsPage .log-table-wrap th{
 .os-row-actions{display:flex;gap:4px;justify-content:center}.os-row-actions button{padding:4px 7px;font-size:11px}
 .os-save-btn{background:#2f3542!important}.os-save-btn:hover{background:#57606f!important}.os-cancel-btn{background:#888!important}.os-del-btn{background:#b33939!important}
 
-/* 代工表－維修時才展開的附加欄位 */
-.os-repair-row{display:none}
-.os-repair-row.show{display:table-row}
-.os-repair-row td{background:#f5f6f8!important;padding:10px 12px!important;border-top:0!important}
-.os-repair-fields{display:grid;grid-template-columns:repeat(6,minmax(130px,1fr));gap:8px 10px;align-items:end}
-.os-repair-field label{display:block;font-size:11px;font-weight:bold;color:#555;margin:0 0 4px}
-.os-repair-field input,.os-repair-field select{width:100%;background:#fff}
-.os-repair-title{font-size:12px;font-weight:bold;color:#2f3542;margin-bottom:8px}
-.os-repair-detail{display:table-row!important}
-.os-repair-detail td{background:#f5f6f8!important;padding:10px 12px!important;color:#444;font-size:12px;border-top:0!important}
-.os-repair-detail-box{display:block!important}
-.os-repair-detail-title{font-size:12px;font-weight:bold;color:#2f3542;margin-bottom:8px}
-.os-repair-detail-grid{display:grid!important;grid-template-columns:repeat(6,minmax(130px,1fr));gap:8px 10px;line-height:1.45}
-.os-repair-detail-item{background:#fff;border:1px solid #d7dbe0;border-radius:5px;padding:6px 8px;min-height:48px}
-.os-repair-detail-item b{display:block;color:#555;font-size:11px;margin-bottom:4px}
-.os-repair-detail-item .value{color:#222;font-size:12px;word-break:break-word}
-.os-repair-detail-item.check-item{display:flex;flex-direction:column;justify-content:center}
-@media(max-width:1100px){.os-repair-detail-grid{grid-template-columns:repeat(3,minmax(130px,1fr))}}
-@media(max-width:1100px){.os-repair-fields{grid-template-columns:repeat(3,minmax(130px,1fr))}}
-@media(max-width:900px){.outsource-wrap{margin:8px;max-height:none}.outsource-toolbar{position:sticky;top:0;z-index:10}.outsource-table{min-width:1370px!important}}
+@media(max-width:900px){.outsource-wrap{margin:8px;max-height:none}.outsource-toolbar{position:sticky;top:0;z-index:10}.outsource-table{min-width:1550px!important}}
 
 </style>
 </head>
@@ -10685,6 +10666,7 @@ function fillOutsourceCustomerByCode(){
   const nameEl=document.getElementById('osCustomerName');
   const cityEl=document.getElementById('osCity');
   const districtEl=document.getElementById('osDistrict');
+  const addressEl=document.getElementById('osAddress');
   if(!codeEl||!nameEl) return;
   const code=String(codeEl.value||'').trim();
   const c=(customers||[]).find(x=>String(x.customerNo||'').trim().toLowerCase()===code.toLowerCase());
@@ -10693,9 +10675,11 @@ function fillOutsourceCustomerByCode(){
     const p=parseTaiwanAddress(c.deliveryAddress||'');
     if(cityEl) cityEl.value=p.city||'';
     if(districtEl) districtEl.value=p.district||'';
+    if(addressEl) addressEl.value=String(c.deliveryAddress||'');
   }else{
     if(cityEl) cityEl.value='';
     if(districtEl) districtEl.value='';
+    if(addressEl) addressEl.value='';
   }
 }
 
@@ -10753,11 +10737,9 @@ function outsourceFormRow(){
   const chk=id=>!!document.getElementById(id)?.checked;
   return {
     id: editingOutsourceId || ("os_"+Date.now()+"_"+Math.random().toString(36).slice(2,7)),
-    date:val('osDate'), time:val('osTime'), customerCode:val('osCustomerCode'), customerName:val('osCustomerName'), customer:[val('osCustomerCode'),val('osCustomerName')].filter(Boolean).join(' '), city:val('osCity'), district:val('osDistrict'), vendor:val('osVendor'),
+    date:val('osDate'), time:val('osTime'), customerCode:val('osCustomerCode'), customerName:val('osCustomerName'), customer:[val('osCustomerCode'),val('osCustomerName')].filter(Boolean).join(' '), city:val('osCity'), district:val('osDistrict'), address:val('osAddress'), vendor:val('osVendor'),
     printed:chk('osPrinted'), shipDate:val('osShipDate'), tracking:val('osTracking'), photo:chk('osPhoto'), completed:chk('osCompleted'),
     service:val('osService'), content:val('osContent'),
-    repairItem:val('osRepairItem'), repairModel:val('osRepairModel'), repairStatus:val('osRepairStatus'), repairWarranty:val('osRepairWarranty'), repairHandling:val('osRepairHandling'), repairRemove:val('osRepairRemove'),
-    repairAppointment:val('osRepairAppointment'), repairMachineCode:val('osRepairMachineCode'), repairLoaner:chk('osRepairLoaner'), repairNewLoaner:chk('osRepairNewLoaner'), repairReturnDate:val('osRepairReturnDate'), repairCompleteDate:val('osRepairCompleteDate'),
     updatedAt:new Date().toISOString()
   };
 }
@@ -10771,10 +10753,9 @@ async function addOutsourceRow(){
 }
 function clearOutsourceForm(){
   editingOutsourceId=null;
-  ['osDate','osTime','osCustomerCode','osCustomerName','osCity','osDistrict','osVendor','osShipDate','osTracking','osContent','osRepairItem','osRepairModel','osRepairStatus','osRepairWarranty','osRepairHandling','osRepairRemove','osRepairAppointment','osRepairMachineCode','osRepairReturnDate','osRepairCompleteDate'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
-  ['osPrinted','osPhoto','osCompleted','osRepairLoaner','osRepairNewLoaner'].forEach(id=>{const e=document.getElementById(id);if(e)e.checked=false;});
+  ['osDate','osTime','osCustomerCode','osCustomerName','osCity','osDistrict','osAddress','osVendor','osShipDate','osTracking','osContent'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  ['osPrinted','osPhoto','osCompleted'].forEach(id=>{const e=document.getElementById(id);if(e)e.checked=false;});
   const s=document.getElementById('osService'); if(s)s.value='換芯';
-  toggleOutsourceRepairFields();
   const btn=document.getElementById('osAddBtn'); if(btn)btn.textContent='＋ 新增';
   const cancel=document.getElementById('osCancelBtn'); if(cancel)cancel.style.display='none';
   const week=document.getElementById('osWeekPreview'); if(week)week.textContent='';
@@ -10783,22 +10764,15 @@ function osDateChanged(){
   const d=document.getElementById('osDate')?.value||'';
   const w=document.getElementById('osWeekPreview'); if(w)w.textContent=osWeekday(d);
 }
-function toggleOutsourceRepairFields(){
-  const service=document.getElementById('osService')?.value||'';
-  const row=document.getElementById('osRepairFieldsRow');
-  if(row) row.classList.toggle('show', service==='維修');
-}
 function editOutsourceRow(id){
   const r=outsourceRows.find(x=>x.id===id); if(!r)return;
   editingOutsourceId=id;
   const set=(id,v)=>{const e=document.getElementById(id);if(e)e.value=v||''};
   const check=(id,v)=>{const e=document.getElementById(id);if(e)e.checked=!!v};
-  set('osDate',r.date);set('osTime',r.time);set('osCustomerCode',r.customerCode || String(r.customer||'').split(/\s+/)[0] || '');set('osCustomerName',r.customerName || String(r.customer||'').replace(/^\S+\s*/,''));set('osCity',r.city);set('osDistrict',r.district);set('osVendor',r.vendor);
+  set('osDate',r.date);set('osTime',r.time);set('osCustomerCode',r.customerCode || String(r.customer||'').split(/\s+/)[0] || '');set('osCustomerName',r.customerName || String(r.customer||'').replace(/^\S+\s*/,''));set('osCity',r.city);set('osDistrict',r.district);set('osAddress',r.address);set('osVendor',r.vendor);
   check('osPrinted',r.printed);set('osShipDate',r.shipDate);set('osTracking',r.tracking);check('osPhoto',r.photo);check('osCompleted',r.completed);
   set('osService',r.service||'換芯');set('osContent',r.content);
-  set('osRepairItem',r.repairItem);set('osRepairModel',r.repairModel);set('osRepairStatus',r.repairStatus);set('osRepairWarranty',r.repairWarranty);set('osRepairHandling',r.repairHandling);set('osRepairRemove',r.repairRemove);
-  set('osRepairAppointment',r.repairAppointment);set('osRepairMachineCode',r.repairMachineCode);check('osRepairLoaner',r.repairLoaner);check('osRepairNewLoaner',r.repairNewLoaner);set('osRepairReturnDate',r.repairReturnDate);set('osRepairCompleteDate',r.repairCompleteDate);
-  osDateChanged();toggleOutsourceRepairFields();
+  osDateChanged();
   const btn=document.getElementById('osAddBtn'); if(btn)btn.textContent='💾 儲存';
   const cancel=document.getElementById('osCancelBtn'); if(cancel)cancel.style.display='inline-block';
   document.querySelector('.outsource-wrap')?.scrollTo({top:0,behavior:'smooth'});
@@ -10819,65 +10793,30 @@ function renderOutsourceTable(){
   updateOutsourceCustomerCodeList();
   const table=document.getElementById('outsourceTable'); if(!table)return;
   const q=(document.getElementById('osSearch')?.value||'').trim().toLowerCase();
-  const rows=outsourceRows.filter(r=>!q || [r.customer,r.vendor,r.content,r.tracking,r.city,r.district,r.service].some(v=>String(v||'').toLowerCase().includes(q)));
+  const rows=outsourceRows.filter(r=>!q || [r.customer,r.vendor,r.content,r.tracking,r.city,r.district,r.address,r.service].some(v=>String(v||'').toLowerCase().includes(q)));
   table.innerHTML=`<thead><tr>
     <th class="os-date">日期</th><th class="os-week">星期</th><th class="os-time">預約時間</th><th class="os-customer">客代姓名</th>
-    <th class="os-city">縣市</th><th class="os-district">地區</th><th class="os-vendor">代工</th><th class="os-check">印單</th>
+    <th class="os-city">縣市</th><th class="os-district">地區</th><th class="os-address">地址</th><th class="os-vendor">代工</th><th class="os-check">印單</th>
     <th class="os-shipdate">寄出日期</th><th class="os-tracking">貨運單</th><th class="os-check">拍單</th><th class="os-check">完成</th>
     <th class="os-service">服務項目</th><th class="os-content">內容</th><th class="os-action">操作</th>
   </tr></thead><tbody>
     <tr class="os-add-row">
       <td><input type="date" id="osDate" onchange="osDateChanged()"></td><td class="os-center" id="osWeekPreview"></td>
       <td><input type="time" id="osTime" step="1800"></td><td><div style="display:flex;gap:4px;align-items:center"><input id="osCustomerCode" list="osCustomerCodeList" placeholder="客代" oninput="fillOutsourceCustomerByCode()" onchange="fillOutsourceCustomerByCode()" style="width:44%"><input id="osCustomerName" placeholder="客名自動帶入" readonly style="width:56%;background:#f1f1f1"></div></td>
-      <td><input id="osCity" placeholder="自動帶入" readonly style="background:#f1f1f1"></td><td><input id="osDistrict" placeholder="自動帶入" readonly style="background:#f1f1f1"></td><td><select id="osVendor"><option value="">請選擇代工廠商</option><option value="國際代工">國際代工</option><option value="泉興代工">泉興代工</option><option value="饌前行代工">饌前行代工</option><option value="玉山淨水">玉山淨水</option><option value="鑫沅代工">鑫沅代工</option><option value="星汎代工">星汎代工</option><option value="花東淨水">花東淨水</option><option value="汎澄代工">汎澄代工</option></select></td>
+      <td><input id="osCity" placeholder="自動帶入" readonly style="background:#f1f1f1"></td><td><input id="osDistrict" placeholder="自動帶入" readonly style="background:#f1f1f1"></td><td><input id="osAddress" placeholder="輸入客代後自動帶入，可自行修改"></td><td><select id="osVendor"><option value="">請選擇代工廠商</option><option value="國際代工">國際代工</option><option value="泉興代工">泉興代工</option><option value="饌前行代工">饌前行代工</option><option value="玉山淨水">玉山淨水</option><option value="鑫沅代工">鑫沅代工</option><option value="星汎代工">星汎代工</option><option value="花東淨水">花東淨水</option><option value="汎澄代工">汎澄代工</option></select></td>
       <td class="os-center"><input type="checkbox" id="osPrinted"></td><td><input type="date" id="osShipDate"></td><td><input id="osTracking" placeholder="貨運單號"></td>
       <td class="os-center"><input type="checkbox" id="osPhoto"></td><td class="os-center"><input type="checkbox" id="osCompleted"></td>
-      <td><select id="osService" onchange="toggleOutsourceRepairFields()"><option>換芯</option><option>維修</option><option>復機</option><option>安裝</option><option>其他</option></select></td>
+      <td><select id="osService"><option>換芯</option><option>維修</option><option>復機</option><option>安裝</option><option>其他</option></select></td>
       <td><input id="osContent" placeholder="內容 / 機型 / 備註"></td>
       <td><div class="os-row-actions"><button id="osAddBtn" class="os-save-btn" onclick="addOutsourceRow()">＋ 新增</button><button id="osCancelBtn" class="os-cancel-btn" style="display:none" onclick="clearOutsourceForm()">取消</button></div></td>
     </tr>
-    <tr id="osRepairFieldsRow" class="os-repair-row">
-      <td colspan="15">
-        <div class="os-repair-title">🔧 維修資料</div>
-        <div class="os-repair-fields">
-          <div class="os-repair-field"><label>項目</label><select id="osRepairItem"><option value="">請選擇</option><option>維修</option><option>大保養</option><option>修轉保</option></select></div>
-          <div class="os-repair-field"><label>機型</label><select id="osRepairModel"><option value="">請選擇</option><option>GD 600</option><option>GD 800</option><option>GD CROSS</option><option>GD CROSS III</option><option>GD SODA</option><option>GD SOLO</option><option>GD TWINKLE</option><option>IK SMILE</option><option>其他</option></select></div>
-          <div class="os-repair-field"><label>機器狀況</label><input id="osRepairStatus" placeholder="例如：E7 / 漏水 / 生物膜"></div>
-          <div class="os-repair-field"><label>保固</label><select id="osRepairWarranty"><option value="">請選擇</option><option>保內</option><option>保外</option></select></div>
-          <div class="os-repair-field"><label>處理方式</label><select id="osRepairHandling"><option value="">請選擇</option><option>拆機</option><option>現場維修</option><option>換機</option><option>取消</option></select></div>
-          <div class="os-repair-field"><label>拆機</label><select id="osRepairRemove"><option value="">請選擇</option><option>主機</option><option>龍頭</option><option>主+龍</option><option>無</option></select></div>
-          <div class="os-repair-field"><label>預約日期</label><input type="date" id="osRepairAppointment"></div>
-          <div class="os-repair-field"><label>機碼</label><input id="osRepairMachineCode" placeholder="機碼"></div>
-          <div class="os-repair-field"><label>備機</label><div style="height:31px;display:flex;align-items:center"><input type="checkbox" id="osRepairLoaner" style="width:18px;height:18px"></div></div>
-          <div class="os-repair-field"><label>備新機</label><div style="height:31px;display:flex;align-items:center"><input type="checkbox" id="osRepairNewLoaner" style="width:18px;height:18px"></div></div>
-          <div class="os-repair-field"><label>機回日期</label><input type="date" id="osRepairReturnDate"></div>
-          <div class="os-repair-field"><label>完成日期</label><input type="date" id="osRepairCompleteDate"></div>
-        </div>
-      </td>
-    </tr>
     ${rows.length?rows.map(r=>`<tr>
       <td class="os-center">${osEsc(osDateText(r.date))}</td><td class="os-center">${osEsc(osWeekday(r.date))}</td><td class="os-center">${osEsc(r.time||'')}</td><td>${osEsc(r.customerCode ? (r.customerCode + (r.customerName?' '+r.customerName:'')) : (r.customer||''))}</td>
-      <td class="os-center">${osEsc(r.city||'')}</td><td class="os-center">${osEsc(r.district||'')}</td><td class="os-center">${r.vendor?`<span class="os-badge vendor">${osEsc(r.vendor)}</span>`:''}</td>
+      <td class="os-center">${osEsc(r.city||'')}</td><td class="os-center">${osEsc(r.district||'')}</td><td>${osEsc(r.address||'')}</td><td class="os-center">${r.vendor?`<span class="os-badge vendor">${osEsc(r.vendor)}</span>`:''}</td>
       <td class="os-center"><input type="checkbox" ${r.printed?'checked':''} onchange="updateOutsourceCheckbox('${osEsc(r.id)}','printed',this.checked)"></td><td class="os-center">${osEsc(osDateText(r.shipDate))}</td><td>${osEsc(r.tracking||'')}</td><td class="os-center"><input type="checkbox" ${r.photo?'checked':''} onchange="updateOutsourceCheckbox('${osEsc(r.id)}','photo',this.checked)"></td><td class="os-center"><input type="checkbox" ${r.completed?'checked':''} onchange="updateOutsourceCheckbox('${osEsc(r.id)}','completed',this.checked)"></td>
       <td class="os-center">${osServiceBadge(r.service||'')}</td><td>${osEsc(r.content||'')}</td>
       <td><div class="os-row-actions"><button onclick="editOutsourceRow('${osEsc(r.id)}')">編輯</button><button class="os-del-btn" onclick="deleteOutsourceRow('${osEsc(r.id)}')">刪除</button></div></td>
-    </tr>${r.service==='維修'?`<tr class="os-repair-detail"><td colspan="15"><div class="os-repair-detail-box">
-      <div class="os-repair-detail-title">🔧 維修資料</div>
-      <div class="os-repair-detail-grid">
-        <div class="os-repair-detail-item"><b>項目</b><div class="value">${osEsc(r.repairItem||'')}</div></div>
-        <div class="os-repair-detail-item"><b>機型</b><div class="value">${osEsc(r.repairModel||'')}</div></div>
-        <div class="os-repair-detail-item"><b>機器狀況</b><div class="value">${osEsc(r.repairStatus||'')}</div></div>
-        <div class="os-repair-detail-item"><b>保固</b><div class="value">${osEsc(r.repairWarranty||'')}</div></div>
-        <div class="os-repair-detail-item"><b>處理方式</b><div class="value">${osEsc(r.repairHandling||'')}</div></div>
-        <div class="os-repair-detail-item"><b>拆機</b><div class="value">${osEsc(r.repairRemove||'')}</div></div>
-        <div class="os-repair-detail-item"><b>預約日期</b><div class="value">${osEsc(osDateText(r.repairAppointment))}</div></div>
-        <div class="os-repair-detail-item"><b>機碼</b><div class="value">${osEsc(r.repairMachineCode||'')}</div></div>
-        <div class="os-repair-detail-item check-item"><b>備機</b><div class="value"><input type="checkbox" ${r.repairLoaner?'checked':''} onchange="updateOutsourceCheckbox('${osEsc(r.id)}','repairLoaner',this.checked)"></div></div>
-        <div class="os-repair-detail-item check-item"><b>備新機</b><div class="value"><input type="checkbox" ${r.repairNewLoaner?'checked':''} onchange="updateOutsourceCheckbox('${osEsc(r.id)}','repairNewLoaner',this.checked)"></div></div>
-        <div class="os-repair-detail-item"><b>機回日期</b><div class="value">${osEsc(osDateText(r.repairReturnDate))}</div></div>
-        <div class="os-repair-detail-item"><b>完成日期</b><div class="value">${osEsc(osDateText(r.repairCompleteDate))}</div></div>
-      </div>
-    </div></td></tr>`:''}`).join(''):`<tr><td colspan="15" style="text-align:center;color:#999;padding:28px">目前沒有代工資料，可直接在上方黃色列新增。</td></tr>`}
+    </tr>`).join(''):`<tr><td colspan="16" style="text-align:center;color:#999;padding:28px">目前沒有代工資料，可直接在上方黃色列新增。</td></tr>`}
   </tbody>`;
 }
 </script>
