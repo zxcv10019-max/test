@@ -1723,6 +1723,21 @@ body.force-admin-scroll #statsPage .log-table-wrap th{
 .os-checked{font-size:18px;font-weight:bold;color:#f39c12}.os-unchecked{font-size:18px;color:#b7b7b7}
 .os-row-actions{display:flex;gap:4px;justify-content:center}.os-row-actions button{padding:4px 7px;font-size:11px}
 .os-save-btn{background:#2f3542!important}.os-save-btn:hover{background:#57606f!important}.os-cancel-btn{background:#888!important}.os-del-btn{background:#b33939!important}
+.os-view-btn{background:#e9edf2!important;color:#333!important;border:1px solid #b8c0cc!important;padding:6px 12px!important;font-weight:bold}
+.os-view-btn.active{background:#2f3542!important;color:#fff!important;border-color:#2f3542!important}
+.os-view-btn.completed.active{background:#6c757d!important;border-color:#6c757d!important}
+.os-view-count{display:inline-block;min-width:20px;margin-left:4px;padding:1px 6px;border-radius:999px;background:rgba(255,255,255,.25);font-size:11px;text-align:center}
+.os-completed-note{font-size:12px;color:#777;margin-left:2px}
+
+/* 代工表：已儲存資料直接在原列編輯，不跳到最上方 */
+.outsource-table tr.os-inline-edit td{background:#fff2cc!important;}
+.outsource-table tr.os-inline-edit:hover td{background:#fff2cc!important;}
+.outsource-table tr.os-inline-edit input,.outsource-table tr.os-inline-edit select{font-size:12px;}
+.outsource-table .os-inline-customer{display:flex;gap:4px;align-items:center;}
+.outsource-table .os-inline-customer input:first-child{width:42%;}
+.outsource-table .os-inline-customer input:last-child{width:58%;}
+.os-inline-save{background:#2f3542!important;}
+.os-inline-cancel{background:#888!important;}
 
 @media(max-width:900px){.outsource-wrap{margin:8px;max-height:none}.outsource-toolbar{position:sticky;top:0;z-index:10}.outsource-table{min-width:1550px!important}}
 
@@ -2159,7 +2174,9 @@ body.force-admin-scroll #statsPage .log-table-wrap th{
 <div id="outsourcePage" class="page">
   <div class="outsource-toolbar">
     <strong>📋 代工表</strong>
-    <span class="os-hint">直接在黃色「新增資料列」填寫，按「新增」後會顯示在同一張表下方。</span>
+    <span class="os-hint">完成案件會自動從進行中隱藏，可切到「已完成」查看。</span>
+    <button id="osActiveViewBtn" class="os-view-btn active" onclick="setOutsourceView('active')">進行中 <span id="osActiveCount" class="os-view-count">0</span></button>
+    <button id="osCompletedViewBtn" class="os-view-btn completed" onclick="setOutsourceView('completed')">已完成 <span id="osCompletedCount" class="os-view-count">0</span></button>
     <input id="osSearch" placeholder="搜尋客代姓名 / 代工 / 內容" style="min-width:220px" oninput="renderOutsourceTable()">
     <button onclick="clearOutsourceForm()" style="background:#888">清空新增列</button>
   </div>
@@ -10645,7 +10662,14 @@ const OUTSOURCE_KEY = "paigong_outsource_v1";
 let outsourceRows = (()=>{ try{return JSON.parse(localStorage.getItem(OUTSOURCE_KEY)||"[]");}catch(e){return [];} })();
 let outsourceUnsubscribe = null;
 let editingOutsourceId = null;
+let outsourceViewMode = 'active'; // active=進行中、completed=已完成
 
+function setOutsourceView(mode){
+  outsourceViewMode = mode === 'completed' ? 'completed' : 'active';
+  editingOutsourceId = null;
+  clearOutsourceForm();
+  renderOutsourceTable();
+}
 
 function updateOutsourceCustomerCodeList(){
   const list=document.getElementById('osCustomerCodeList');
@@ -10767,15 +10791,69 @@ function osDateChanged(){
 function editOutsourceRow(id){
   const r=outsourceRows.find(x=>x.id===id); if(!r)return;
   editingOutsourceId=id;
-  const set=(id,v)=>{const e=document.getElementById(id);if(e)e.value=v||''};
-  const check=(id,v)=>{const e=document.getElementById(id);if(e)e.checked=!!v};
-  set('osDate',r.date);set('osTime',r.time);set('osCustomerCode',r.customerCode || String(r.customer||'').split(/\s+/)[0] || '');set('osCustomerName',r.customerName || String(r.customer||'').replace(/^\S+\s*/,''));set('osCity',r.city);set('osDistrict',r.district);set('osAddress',r.address);set('osVendor',r.vendor);
-  check('osPrinted',r.printed);set('osShipDate',r.shipDate);set('osTracking',r.tracking);check('osPhoto',r.photo);check('osCompleted',r.completed);
-  set('osService',r.service||'換芯');set('osContent',r.content);
-  osDateChanged();
-  const btn=document.getElementById('osAddBtn'); if(btn)btn.textContent='💾 儲存';
-  const cancel=document.getElementById('osCancelBtn'); if(cancel)cancel.style.display='inline-block';
-  document.querySelector('.outsource-wrap')?.scrollTo({top:0,behavior:'smooth'});
+  renderOutsourceTable();
+  // 保持目前捲動位置，只將正在編輯的原資料列保持在畫面中
+  requestAnimationFrame(()=>{
+    const row=document.getElementById('osEditRow_'+id);
+    if(row) row.scrollIntoView({block:'nearest',inline:'nearest'});
+  });
+}
+function cancelInlineOutsourceEdit(){
+  editingOutsourceId=null;
+  renderOutsourceTable();
+}
+function fillOutsourceInlineCustomer(id){
+  const codeEl=document.getElementById('osEditCustomerCode_'+id);
+  const nameEl=document.getElementById('osEditCustomerName_'+id);
+  const cityEl=document.getElementById('osEditCity_'+id);
+  const districtEl=document.getElementById('osEditDistrict_'+id);
+  const addressEl=document.getElementById('osEditAddress_'+id);
+  if(!codeEl||!nameEl) return;
+  const code=String(codeEl.value||'').trim();
+  const c=(customers||[]).find(x=>String(x.customerNo||'').trim().toLowerCase()===code.toLowerCase());
+  nameEl.value=c ? String(c.fullName||c.shortName||c.personName||'') : '';
+  if(c){
+    const p=parseTaiwanAddress(c.deliveryAddress||'');
+    if(cityEl) cityEl.value=p.city||'';
+    if(districtEl) districtEl.value=p.district||'';
+    if(addressEl) addressEl.value=String(c.deliveryAddress||'');
+  }else{
+    if(cityEl) cityEl.value='';
+    if(districtEl) districtEl.value='';
+    if(addressEl) addressEl.value='';
+  }
+}
+async function saveInlineOutsourceRow(id){
+  const old=outsourceRows.find(x=>x.id===id); if(!old)return;
+  const val=suffix=>document.getElementById('osEdit'+suffix+'_'+id)?.value||'';
+  const chk=suffix=>!!document.getElementById('osEdit'+suffix+'_'+id)?.checked;
+  const row={
+    ...old,
+    date:val('Date'),
+    time:val('Time'),
+    customerCode:val('CustomerCode'),
+    customerName:val('CustomerName'),
+    city:val('City'),
+    district:val('District'),
+    address:val('Address'),
+    vendor:val('Vendor'),
+    printed:chk('Printed'),
+    shipDate:val('ShipDate'),
+    tracking:val('Tracking'),
+    photo:chk('Photo'),
+    completed:chk('Completed'),
+    service:val('Service'),
+    content:val('Content'),
+    updatedAt:new Date().toISOString()
+  };
+  row.customer=[row.customerCode,row.customerName].filter(Boolean).join(' ');
+  const i=outsourceRows.findIndex(x=>x.id===id);
+  if(i>=0) outsourceRows[i]=row;
+  outsourceRows.sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')) || String(a.time||'').localeCompare(String(b.time||'')));
+  editingOutsourceId=null;
+  saveOutsourceLocal();
+  renderOutsourceTable();
+  await persistOutsourceRow(row);
 }
 async function deleteOutsourceRow(id){
   if(!confirm('確定刪除這筆代工資料？'))return;
@@ -10787,38 +10865,78 @@ async function updateOutsourceCheckbox(id, field, checked){
   if(!r) return;
   r[field]=!!checked;
   r.updatedAt=new Date().toISOString();
+  saveOutsourceLocal();
+  renderOutsourceTable(); // 完成後立刻從進行中隱藏；取消完成則立刻回到進行中
   await persistOutsourceRow(r);
 }
 function renderOutsourceTable(){
   updateOutsourceCustomerCodeList();
   const table=document.getElementById('outsourceTable'); if(!table)return;
   const q=(document.getElementById('osSearch')?.value||'').trim().toLowerCase();
-  const rows=outsourceRows.filter(r=>!q || [r.customer,r.vendor,r.content,r.tracking,r.city,r.district,r.address,r.service].some(v=>String(v||'').toLowerCase().includes(q)));
-  table.innerHTML=`<thead><tr>
-    <th class="os-date">日期</th><th class="os-week">星期</th><th class="os-time">預約時間</th><th class="os-customer">客代姓名</th>
-    <th class="os-city">縣市</th><th class="os-district">地區</th><th class="os-address">地址</th><th class="os-vendor">代工</th><th class="os-check">印單</th>
-    <th class="os-shipdate">寄出日期</th><th class="os-tracking">貨運單</th><th class="os-check">拍單</th><th class="os-check">完成</th>
-    <th class="os-service">服務項目</th><th class="os-content">內容</th><th class="os-action">操作</th>
-  </tr></thead><tbody>
+  const activeCount=outsourceRows.filter(r=>!r.completed).length;
+  const completedCount=outsourceRows.filter(r=>!!r.completed).length;
+  const ac=document.getElementById('osActiveCount'); if(ac) ac.textContent=activeCount;
+  const cc=document.getElementById('osCompletedCount'); if(cc) cc.textContent=completedCount;
+  const ab=document.getElementById('osActiveViewBtn'); if(ab) ab.classList.toggle('active',outsourceViewMode==='active');
+  const cb=document.getElementById('osCompletedViewBtn'); if(cb) cb.classList.toggle('active',outsourceViewMode==='completed');
+  const rows=outsourceRows.filter(r=>{
+    const modeOk = outsourceViewMode==='completed' ? !!r.completed : !r.completed;
+    const searchOk = !q || [r.customer,r.vendor,r.content,r.tracking,r.city,r.district,r.address,r.service].some(v=>String(v||'').toLowerCase().includes(q));
+    return modeOk && searchOk;
+  });
+  const vendorOptions=['國際代工','泉興代工','饌前行代工','玉山淨水','鑫沅代工','星汎代工','花東淨水','汎澄代工'];
+  const serviceOptions=['換芯','維修','復機','安裝','其他'];
+  const optionHtml=(arr,current,placeholder='')=>`${placeholder?`<option value="">${osEsc(placeholder)}</option>`:''}${arr.map(v=>`<option value="${osEsc(v)}" ${v===current?'selected':''}>${osEsc(v)}</option>`).join('')}`;
+  const addRowHtml = outsourceViewMode==='active' ? `
     <tr class="os-add-row">
       <td><input type="date" id="osDate" onchange="osDateChanged()"></td><td class="os-center" id="osWeekPreview"></td>
       <td><input type="time" id="osTime" step="1800"></td><td><div style="display:flex;gap:4px;align-items:center"><input id="osCustomerCode" list="osCustomerCodeList" placeholder="客代" oninput="fillOutsourceCustomerByCode()" onchange="fillOutsourceCustomerByCode()" style="width:44%"><input id="osCustomerName" placeholder="客名自動帶入" readonly style="width:56%;background:#f1f1f1"></div></td>
-      <td><input id="osCity" placeholder="自動帶入" readonly style="background:#f1f1f1"></td><td><input id="osDistrict" placeholder="自動帶入" readonly style="background:#f1f1f1"></td><td><input id="osAddress" placeholder="輸入客代後自動帶入，可自行修改"></td><td><select id="osVendor"><option value="">請選擇代工廠商</option><option value="國際代工">國際代工</option><option value="泉興代工">泉興代工</option><option value="饌前行代工">饌前行代工</option><option value="玉山淨水">玉山淨水</option><option value="鑫沅代工">鑫沅代工</option><option value="星汎代工">星汎代工</option><option value="花東淨水">花東淨水</option><option value="汎澄代工">汎澄代工</option></select></td>
+      <td><input id="osCity" placeholder="自動帶入" readonly style="background:#f1f1f1"></td><td><input id="osDistrict" placeholder="自動帶入" readonly style="background:#f1f1f1"></td><td><input id="osAddress" placeholder="輸入客代後自動帶入，可自行修改"></td><td><select id="osVendor">${optionHtml(vendorOptions,'','請選擇代工廠商')}</select></td>
       <td class="os-center"><input type="checkbox" id="osPrinted"></td><td><input type="date" id="osShipDate"></td><td><input id="osTracking" placeholder="貨運單號"></td>
       <td class="os-center"><input type="checkbox" id="osPhoto"></td><td class="os-center"><input type="checkbox" id="osCompleted"></td>
-      <td><select id="osService"><option>換芯</option><option>維修</option><option>復機</option><option>安裝</option><option>其他</option></select></td>
+      <td><select id="osService">${optionHtml(serviceOptions,'換芯')}</select></td>
       <td><input id="osContent" placeholder="內容 / 機型 / 備註"></td>
-      <td><div class="os-row-actions"><button id="osAddBtn" class="os-save-btn" onclick="addOutsourceRow()">＋ 新增</button><button id="osCancelBtn" class="os-cancel-btn" style="display:none" onclick="clearOutsourceForm()">取消</button></div></td>
-    </tr>
-    ${rows.length?rows.map(r=>`<tr>
+      <td><div class="os-row-actions"><button id="osAddBtn" class="os-save-btn" onclick="addOutsourceRow()">＋ 新增</button></div></td>
+    </tr>` : '';
+
+  const dataRowsHtml=rows.length ? rows.map(r=>{
+    if(editingOutsourceId===r.id){
+      return `<tr class="os-inline-edit" id="osEditRow_${osEsc(r.id)}">
+        <td><input type="date" id="osEditDate_${osEsc(r.id)}" value="${osEsc(r.date||'')}"></td>
+        <td class="os-center">${osEsc(osWeekday(r.date))}</td>
+        <td><input type="time" step="1800" id="osEditTime_${osEsc(r.id)}" value="${osEsc(r.time||'')}"></td>
+        <td><div class="os-inline-customer"><input id="osEditCustomerCode_${osEsc(r.id)}" list="osCustomerCodeList" value="${osEsc(r.customerCode||String(r.customer||'').split(/\s+/)[0]||'')}" oninput="fillOutsourceInlineCustomer('${osEsc(r.id)}')" onchange="fillOutsourceInlineCustomer('${osEsc(r.id)}')"><input id="osEditCustomerName_${osEsc(r.id)}" value="${osEsc(r.customerName||String(r.customer||'').replace(/^\S+\s*/,''))}" readonly style="background:#f1f1f1"></div></td>
+        <td><input id="osEditCity_${osEsc(r.id)}" value="${osEsc(r.city||'')}" readonly style="background:#f1f1f1"></td>
+        <td><input id="osEditDistrict_${osEsc(r.id)}" value="${osEsc(r.district||'')}" readonly style="background:#f1f1f1"></td>
+        <td><input id="osEditAddress_${osEsc(r.id)}" value="${osEsc(r.address||'')}"></td>
+        <td><select id="osEditVendor_${osEsc(r.id)}">${optionHtml(vendorOptions,r.vendor||'','請選擇代工廠商')}</select></td>
+        <td class="os-center"><input type="checkbox" id="osEditPrinted_${osEsc(r.id)}" ${r.printed?'checked':''}></td>
+        <td><input type="date" id="osEditShipDate_${osEsc(r.id)}" value="${osEsc(r.shipDate||'')}"></td>
+        <td><input id="osEditTracking_${osEsc(r.id)}" value="${osEsc(r.tracking||'')}"></td>
+        <td class="os-center"><input type="checkbox" id="osEditPhoto_${osEsc(r.id)}" ${r.photo?'checked':''}></td>
+        <td class="os-center"><input type="checkbox" id="osEditCompleted_${osEsc(r.id)}" ${r.completed?'checked':''}></td>
+        <td><select id="osEditService_${osEsc(r.id)}">${optionHtml(serviceOptions,r.service||'換芯')}</select></td>
+        <td><input id="osEditContent_${osEsc(r.id)}" value="${osEsc(r.content||'')}"></td>
+        <td><div class="os-row-actions"><button class="os-inline-save" onclick="saveInlineOutsourceRow('${osEsc(r.id)}')">💾 儲存</button><button class="os-inline-cancel" onclick="cancelInlineOutsourceEdit()">取消</button></div></td>
+      </tr>`;
+    }
+    return `<tr>
       <td class="os-center">${osEsc(osDateText(r.date))}</td><td class="os-center">${osEsc(osWeekday(r.date))}</td><td class="os-center">${osEsc(r.time||'')}</td><td>${osEsc(r.customerCode ? (r.customerCode + (r.customerName?' '+r.customerName:'')) : (r.customer||''))}</td>
       <td class="os-center">${osEsc(r.city||'')}</td><td class="os-center">${osEsc(r.district||'')}</td><td>${osEsc(r.address||'')}</td><td class="os-center">${r.vendor?`<span class="os-badge vendor">${osEsc(r.vendor)}</span>`:''}</td>
       <td class="os-center"><input type="checkbox" ${r.printed?'checked':''} onchange="updateOutsourceCheckbox('${osEsc(r.id)}','printed',this.checked)"></td><td class="os-center">${osEsc(osDateText(r.shipDate))}</td><td>${osEsc(r.tracking||'')}</td><td class="os-center"><input type="checkbox" ${r.photo?'checked':''} onchange="updateOutsourceCheckbox('${osEsc(r.id)}','photo',this.checked)"></td><td class="os-center"><input type="checkbox" ${r.completed?'checked':''} onchange="updateOutsourceCheckbox('${osEsc(r.id)}','completed',this.checked)"></td>
       <td class="os-center">${osServiceBadge(r.service||'')}</td><td>${osEsc(r.content||'')}</td>
       <td><div class="os-row-actions"><button onclick="editOutsourceRow('${osEsc(r.id)}')">編輯</button><button class="os-del-btn" onclick="deleteOutsourceRow('${osEsc(r.id)}')">刪除</button></div></td>
-    </tr>`).join(''):`<tr><td colspan="16" style="text-align:center;color:#999;padding:28px">目前沒有代工資料，可直接在上方黃色列新增。</td></tr>`}
-  </tbody>`;
+    </tr>`;
+  }).join('') : `<tr><td colspan="16" style="text-align:center;color:#999;padding:28px">${outsourceViewMode==='completed'?'目前沒有已完成的代工資料。':'目前沒有進行中的代工資料，可直接在上方黃色列新增。'}</td></tr>`;
+
+  table.innerHTML=`<thead><tr>
+    <th class="os-date">日期</th><th class="os-week">星期</th><th class="os-time">預約時間</th><th class="os-customer">客代姓名</th>
+    <th class="os-city">縣市</th><th class="os-district">地區</th><th class="os-address">地址</th><th class="os-vendor">代工</th><th class="os-check">印單</th>
+    <th class="os-shipdate">寄出日期</th><th class="os-tracking">貨運單</th><th class="os-check">拍單</th><th class="os-check">完成</th>
+    <th class="os-service">服務項目</th><th class="os-content">內容</th><th class="os-action">操作</th>
+  </tr></thead><tbody>${addRowHtml}${dataRowsHtml}</tbody>`;
 }
+
 </script>
 </body>
 </html>
