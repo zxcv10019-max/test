@@ -1679,6 +1679,19 @@ body.force-admin-scroll #statsPage .log-table-wrap th{
 
 
 
+
+/* 代工表：已儲存資料的勾選框可直接點選 */
+#outsourceTable tbody input[type="checkbox"]{
+  width:18px!important;
+  height:18px!important;
+  cursor:pointer;
+  accent-color:#2f3542;
+}
+.os-repair-detail-grid input[type="checkbox"]{
+  vertical-align:middle;
+  margin-left:4px;
+}
+
 /* ===== 代工表：新增與資料顯示合併在同一張表 ===== */
 #outsourcePage.page.active{
   display:block !important;
@@ -10787,6 +10800,14 @@ async function deleteOutsourceRow(id){
   if(!confirm('確定刪除這筆代工資料？'))return;
   await removeOutsourceRow(id);
 }
+
+async function updateOutsourceCheckbox(id, field, checked){
+  const r=outsourceRows.find(x=>x.id===id);
+  if(!r) return;
+  r[field]=!!checked;
+  r.updatedAt=new Date().toISOString();
+  await persistOutsourceRow(r);
+}
 function renderOutsourceTable(){
   updateOutsourceCustomerCodeList();
   const table=document.getElementById('outsourceTable'); if(!table)return;
@@ -10813,7 +10834,7 @@ function renderOutsourceTable(){
         <div class="os-repair-title">🔧 維修資料</div>
         <div class="os-repair-fields">
           <div class="os-repair-field"><label>項目</label><select id="osRepairItem"><option value="">請選擇</option><option>維修</option><option>大保養</option><option>修轉保</option></select></div>
-          <div class="os-repair-field"><label>機型</label><select id="osRepairModel"><option value="">請選擇</option><option>GD SODA</option><option>GD800</option><option>GD600</option><option>GD CROSS///</option><option>其他</option></select></div>
+          <div class="os-repair-field"><label>機型</label><select id="osRepairModel"><option value="">請選擇</option><option>GD 600</option><option>GD 800</option><option>GD CROSS</option><option>GD CROSS III</option><option>GD SODA</option><option>GD SOLO</option><option>GD TWINKLE</option><option>IK SMILE</option><option>其他</option></select></div>
           <div class="os-repair-field"><label>機器狀況</label><input id="osRepairStatus" placeholder="例如：E7 / 漏水 / 生物膜"></div>
           <div class="os-repair-field"><label>保固</label><select id="osRepairWarranty"><option value="">請選擇</option><option>保內</option><option>保外</option></select></div>
           <div class="os-repair-field"><label>處理方式</label><select id="osRepairHandling"><option value="">請選擇</option><option>拆機</option><option>現場維修</option><option>換機</option><option>取消</option></select></div>
@@ -10830,12 +10851,12 @@ function renderOutsourceTable(){
     ${rows.length?rows.map(r=>`<tr>
       <td class="os-center">${osEsc(osDateText(r.date))}</td><td class="os-center">${osEsc(osWeekday(r.date))}</td><td class="os-center">${osEsc(r.time||'')}</td><td>${osEsc(r.customerCode ? (r.customerCode + (r.customerName?' '+r.customerName:'')) : (r.customer||''))}</td>
       <td class="os-center">${osEsc(r.city||'')}</td><td class="os-center">${osEsc(r.district||'')}</td><td class="os-center">${r.vendor?`<span class="os-badge vendor">${osEsc(r.vendor)}</span>`:''}</td>
-      <td class="os-center">${osChecked(r.printed)}</td><td class="os-center">${osEsc(osDateText(r.shipDate))}</td><td>${osEsc(r.tracking||'')}</td><td class="os-center">${osChecked(r.photo)}</td><td class="os-center">${osChecked(r.completed)}</td>
+      <td class="os-center"><input type="checkbox" ${r.printed?'checked':''} onchange="updateOutsourceCheckbox('${osEsc(r.id)}','printed',this.checked)"></td><td class="os-center">${osEsc(osDateText(r.shipDate))}</td><td>${osEsc(r.tracking||'')}</td><td class="os-center"><input type="checkbox" ${r.photo?'checked':''} onchange="updateOutsourceCheckbox('${osEsc(r.id)}','photo',this.checked)"></td><td class="os-center"><input type="checkbox" ${r.completed?'checked':''} onchange="updateOutsourceCheckbox('${osEsc(r.id)}','completed',this.checked)"></td>
       <td class="os-center">${osServiceBadge(r.service||'')}</td><td>${osEsc(r.content||'')}</td>
       <td><div class="os-row-actions"><button onclick="editOutsourceRow('${osEsc(r.id)}')">編輯</button><button class="os-del-btn" onclick="deleteOutsourceRow('${osEsc(r.id)}')">刪除</button></div></td>
     </tr>${r.service==='維修'?`<tr class="os-repair-detail"><td colspan="15"><div class="os-repair-detail-grid">
       <span><b>項目：</b>${osEsc(r.repairItem||'')}</span><span><b>機型：</b>${osEsc(r.repairModel||'')}</span><span><b>機器狀況：</b>${osEsc(r.repairStatus||'')}</span><span><b>保固：</b>${osEsc(r.repairWarranty||'')}</span><span><b>處理方式：</b>${osEsc(r.repairHandling||'')}</span><span><b>拆機：</b>${osEsc(r.repairRemove||'')}</span>
-      <span><b>預約日期：</b>${osEsc(osDateText(r.repairAppointment))}</span><span><b>機碼：</b>${osEsc(r.repairMachineCode||'')}</span><span><b>備機：</b>${r.repairLoaner?'☑':'☐'}</span><span><b>備新機：</b>${r.repairNewLoaner?'☑':'☐'}</span><span><b>機回日期：</b>${osEsc(osDateText(r.repairReturnDate))}</span><span><b>完成日期：</b>${osEsc(osDateText(r.repairCompleteDate))}</span>
+      <span><b>預約日期：</b>${osEsc(osDateText(r.repairAppointment))}</span><span><b>機碼：</b>${osEsc(r.repairMachineCode||'')}</span><span><b>備機：</b><input type="checkbox" ${r.repairLoaner?'checked':''} onchange="updateOutsourceCheckbox('${osEsc(r.id)}','repairLoaner',this.checked)"></span><span><b>備新機：</b><input type="checkbox" ${r.repairNewLoaner?'checked':''} onchange="updateOutsourceCheckbox('${osEsc(r.id)}','repairNewLoaner',this.checked)"></span><span><b>機回日期：</b>${osEsc(osDateText(r.repairReturnDate))}</span><span><b>完成日期：</b>${osEsc(osDateText(r.repairCompleteDate))}</span>
     </div></td></tr>`:''}`).join(''):`<tr><td colspan="15" style="text-align:center;color:#999;padding:28px">目前沒有代工資料，可直接在上方黃色列新增。</td></tr>`}
   </tbody>`;
 }
