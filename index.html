@@ -1732,9 +1732,16 @@ body.force-admin-scroll #statsPage .log-table-wrap th{
 .os-repair-field label{display:block;font-size:11px;font-weight:bold;color:#555;margin:0 0 4px}
 .os-repair-field input,.os-repair-field select{width:100%;background:#fff}
 .os-repair-title{font-size:12px;font-weight:bold;color:#2f3542;margin-bottom:8px}
-.os-repair-detail td{background:#f8f9fb!important;padding:8px 12px!important;color:#444;font-size:12px}
-.os-repair-detail-grid{display:flex;gap:14px;flex-wrap:wrap;line-height:1.6}
-.os-repair-detail-grid b{color:#2f3542}
+.os-repair-detail{display:table-row!important}
+.os-repair-detail td{background:#f5f6f8!important;padding:10px 12px!important;color:#444;font-size:12px;border-top:0!important}
+.os-repair-detail-box{display:block!important}
+.os-repair-detail-title{font-size:12px;font-weight:bold;color:#2f3542;margin-bottom:8px}
+.os-repair-detail-grid{display:grid!important;grid-template-columns:repeat(6,minmax(130px,1fr));gap:8px 10px;line-height:1.45}
+.os-repair-detail-item{background:#fff;border:1px solid #d7dbe0;border-radius:5px;padding:6px 8px;min-height:48px}
+.os-repair-detail-item b{display:block;color:#555;font-size:11px;margin-bottom:4px}
+.os-repair-detail-item .value{color:#222;font-size:12px;word-break:break-word}
+.os-repair-detail-item.check-item{display:flex;flex-direction:column;justify-content:center}
+@media(max-width:1100px){.os-repair-detail-grid{grid-template-columns:repeat(3,minmax(130px,1fr))}}
 @media(max-width:1100px){.os-repair-fields{grid-template-columns:repeat(3,minmax(130px,1fr))}}
 @media(max-width:900px){.outsource-wrap{margin:8px;max-height:none}.outsource-toolbar{position:sticky;top:0;z-index:10}.outsource-table{min-width:1370px!important}}
 
@@ -10854,9 +10861,22 @@ function renderOutsourceTable(){
       <td class="os-center"><input type="checkbox" ${r.printed?'checked':''} onchange="updateOutsourceCheckbox('${osEsc(r.id)}','printed',this.checked)"></td><td class="os-center">${osEsc(osDateText(r.shipDate))}</td><td>${osEsc(r.tracking||'')}</td><td class="os-center"><input type="checkbox" ${r.photo?'checked':''} onchange="updateOutsourceCheckbox('${osEsc(r.id)}','photo',this.checked)"></td><td class="os-center"><input type="checkbox" ${r.completed?'checked':''} onchange="updateOutsourceCheckbox('${osEsc(r.id)}','completed',this.checked)"></td>
       <td class="os-center">${osServiceBadge(r.service||'')}</td><td>${osEsc(r.content||'')}</td>
       <td><div class="os-row-actions"><button onclick="editOutsourceRow('${osEsc(r.id)}')">編輯</button><button class="os-del-btn" onclick="deleteOutsourceRow('${osEsc(r.id)}')">刪除</button></div></td>
-    </tr>${r.service==='維修'?`<tr class="os-repair-detail"><td colspan="15"><div class="os-repair-detail-grid">
-      <span><b>項目：</b>${osEsc(r.repairItem||'')}</span><span><b>機型：</b>${osEsc(r.repairModel||'')}</span><span><b>機器狀況：</b>${osEsc(r.repairStatus||'')}</span><span><b>保固：</b>${osEsc(r.repairWarranty||'')}</span><span><b>處理方式：</b>${osEsc(r.repairHandling||'')}</span><span><b>拆機：</b>${osEsc(r.repairRemove||'')}</span>
-      <span><b>預約日期：</b>${osEsc(osDateText(r.repairAppointment))}</span><span><b>機碼：</b>${osEsc(r.repairMachineCode||'')}</span><span><b>備機：</b><input type="checkbox" ${r.repairLoaner?'checked':''} onchange="updateOutsourceCheckbox('${osEsc(r.id)}','repairLoaner',this.checked)"></span><span><b>備新機：</b><input type="checkbox" ${r.repairNewLoaner?'checked':''} onchange="updateOutsourceCheckbox('${osEsc(r.id)}','repairNewLoaner',this.checked)"></span><span><b>機回日期：</b>${osEsc(osDateText(r.repairReturnDate))}</span><span><b>完成日期：</b>${osEsc(osDateText(r.repairCompleteDate))}</span>
+    </tr>${r.service==='維修'?`<tr class="os-repair-detail"><td colspan="15"><div class="os-repair-detail-box">
+      <div class="os-repair-detail-title">🔧 維修資料</div>
+      <div class="os-repair-detail-grid">
+        <div class="os-repair-detail-item"><b>項目</b><div class="value">${osEsc(r.repairItem||'')}</div></div>
+        <div class="os-repair-detail-item"><b>機型</b><div class="value">${osEsc(r.repairModel||'')}</div></div>
+        <div class="os-repair-detail-item"><b>機器狀況</b><div class="value">${osEsc(r.repairStatus||'')}</div></div>
+        <div class="os-repair-detail-item"><b>保固</b><div class="value">${osEsc(r.repairWarranty||'')}</div></div>
+        <div class="os-repair-detail-item"><b>處理方式</b><div class="value">${osEsc(r.repairHandling||'')}</div></div>
+        <div class="os-repair-detail-item"><b>拆機</b><div class="value">${osEsc(r.repairRemove||'')}</div></div>
+        <div class="os-repair-detail-item"><b>預約日期</b><div class="value">${osEsc(osDateText(r.repairAppointment))}</div></div>
+        <div class="os-repair-detail-item"><b>機碼</b><div class="value">${osEsc(r.repairMachineCode||'')}</div></div>
+        <div class="os-repair-detail-item check-item"><b>備機</b><div class="value"><input type="checkbox" ${r.repairLoaner?'checked':''} onchange="updateOutsourceCheckbox('${osEsc(r.id)}','repairLoaner',this.checked)"></div></div>
+        <div class="os-repair-detail-item check-item"><b>備新機</b><div class="value"><input type="checkbox" ${r.repairNewLoaner?'checked':''} onchange="updateOutsourceCheckbox('${osEsc(r.id)}','repairNewLoaner',this.checked)"></div></div>
+        <div class="os-repair-detail-item"><b>機回日期</b><div class="value">${osEsc(osDateText(r.repairReturnDate))}</div></div>
+        <div class="os-repair-detail-item"><b>完成日期</b><div class="value">${osEsc(osDateText(r.repairCompleteDate))}</div></div>
+      </div>
     </div></td></tr>`:''}`).join(''):`<tr><td colspan="15" style="text-align:center;color:#999;padding:28px">目前沒有代工資料，可直接在上方黃色列新增。</td></tr>`}
   </tbody>`;
 }
