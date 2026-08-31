@@ -548,8 +548,8 @@ body{
 /* 上方區塊保留在畫面上，不跟著表格捲動 */
 .header,
 .tabs,
-#schedulePage > .toolbar,
-#schedulePage > .summary,
+#scheduleCalendarView > .toolbar,
+#scheduleCalendarView > .summary,
 .engineer-code-note{
   flex-shrink:0;
 }
@@ -780,8 +780,7 @@ body{
 }
 
 
-/* 非派工表頁面可上下滑動：新增派工資料 / 客戶資料 / 派工明細 / 休假管理 */
-#dispatchPage.page.active,
+/* 非派工表頁面可上下滑動：客戶資料 / 派工明細 / 休假管理 */
 #customerPage.page.active,
 #listPage.page.active,
 #leavePage.page.active{
@@ -794,9 +793,49 @@ body{
   padding-bottom:80px !important;
 }
 
-/* 新增派工頁內容太長時，表單區本身可以滑動到底 */
-#dispatchPage{
-  min-height:0 !important;
+/* 新增派工：右側滑出面板（在任何頁面都能開啟，不需要切換頁籤） */
+.dispatch-drawer-overlay{
+  position:fixed; inset:0; background:rgba(0,0,0,.4);
+  z-index:900; opacity:0; pointer-events:none;
+  transition:opacity .25s ease;
+}
+.dispatch-drawer-overlay.open{ opacity:1; pointer-events:auto; }
+
+#dispatchPage.dispatch-drawer{
+  position:fixed; top:0; right:0; bottom:0;
+  width:min(760px,96vw);
+  background:#f3f3f3;
+  box-shadow:-6px 0 24px rgba(0,0,0,.28);
+  z-index:901;
+  transform:translateX(100%);
+  transition:transform .28s ease;
+  display:flex; flex-direction:column;
+  min-height:0;
+}
+#dispatchPage.dispatch-drawer.open{ transform:translateX(0); }
+.dispatch-drawer-header{
+  position:sticky; top:0; z-index:2;
+  background:#2f3542; color:#fff;
+  padding:14px 18px; display:flex; align-items:center; justify-content:space-between;
+  flex:0 0 auto;
+}
+.dispatch-drawer-header h3{margin:0;font-size:16px}
+.dispatch-drawer-close{
+  background:transparent; border:none; color:#fff; font-size:22px;
+  line-height:1; cursor:pointer; padding:2px 10px; border-radius:4px;
+}
+.dispatch-drawer-close:hover{background:rgba(255,255,255,.18)}
+.dispatch-drawer-body{
+  flex:1 1 auto; min-height:0; overflow-y:auto; padding-bottom:60px;
+}
+.dispatch-drawer .form-card{margin:0;border:none;background:transparent;padding:14px}
+.dispatch-drawer .help{margin:0 0 12px}
+.dispatch-drawer .form-grid{grid-template-columns:repeat(2,1fr)}
+.dispatch-drawer .field-wide{grid-column:span 2}
+body.dispatch-drawer-lock{overflow:hidden}
+@media(max-width:640px){
+  .dispatch-drawer .form-grid{grid-template-columns:1fr}
+  .dispatch-drawer .field-wide{grid-column:auto}
 }
 
 
@@ -1314,9 +1353,9 @@ body.no-permission .auth-status{background:#fde2e2;color:#922b21;border-color:#f
     min-height:0 !important;
     overflow:visible !important;
   }
-  #schedulePage > .toolbar,
-  #schedulePage > .summary,
-  #schedulePage > .engineer-code-note,
+  #scheduleCalendarView > .toolbar,
+  #scheduleCalendarView > .summary,
+  #scheduleCalendarView > .engineer-code-note,
   #scheduleWrap{
     display:none !important;
   }
@@ -1692,15 +1731,22 @@ body.force-admin-scroll #statsPage .log-table-wrap th{
   margin-left:4px;
 }
 
-/* ===== 代工表：新增與資料顯示合併在同一張表 ===== */
-#outsourcePage.page.active{
-  display:block !important;
-  flex:1 1 auto !important;
-  min-height:0 !important;
-  height:auto !important;
-  overflow-y:auto !important;
-  overflow-x:hidden !important;
-  padding-bottom:80px !important;
+/* ===== 代工表：現在是「派工表」頁面內的第二個分頁，不再是獨立頁面 ===== */
+.schedule-subtabs{
+  display:flex; gap:6px; padding:8px 12px 0; flex-shrink:0; background:#eef1f5;
+}
+.schedule-subtab-btn{
+  background:#dfe4ea; color:#2f3542; border:1px solid #c8cdd3; border-bottom:none;
+  border-radius:8px 8px 0 0; padding:8px 16px; font-size:14px; font-weight:bold; cursor:pointer;
+}
+.schedule-subtab-btn.active{ background:#fff; color:#2f3542; }
+.schedule-subtab-btn:hover{ background:#f1f3f6; }
+#scheduleCalendarView{
+  display:flex; flex-direction:column; flex:1 1 auto; min-height:0;
+}
+#scheduleOutsourceView{
+  flex:1 1 auto; min-height:0; overflow-y:auto; overflow-x:hidden;
+  background:#fff; padding-bottom:80px;
 }
 .outsource-toolbar{background:#fff;padding:10px 12px;border-bottom:1px solid #ccc;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .outsource-toolbar .os-hint{font-size:13px;color:#666;margin-right:auto}
@@ -1787,13 +1833,11 @@ body.force-admin-scroll #statsPage .log-table-wrap th{
 
 <div class="tabs">
   <button id="tabSchedule" class="active" onclick="showPage('schedulePage')">派工表</button>
-  <button id="tabDispatch" onclick="showPage('dispatchPage')">新增派工資料</button>
   <button id="tabCustomer" onclick="showPage('customerPage')">客戶資料</button>
   <button id="tabList" onclick="showPage('listPage')">派工明細</button>
   <button id="tabRepair" onclick="showPage('repairPage')">🛠️ 報修案件 <span id="repairPendingCount" style="background:#d63031;color:#fff;border-radius:999px;padding:1px 6px;font-size:11px;display:none">0</span></button>
   <button id="tabLeave" onclick="showPage('leavePage')">🏖️ 休假管理</button>
   <button id="tabCartridge" onclick="showPage('cartridgePage')">🔄 換芯名單</button>
-  <button id="tabOutsource" onclick="showPage('outsourcePage')">📋 代工表</button>
   <button id="tabStats" onclick="showPage('statsPage')" style="display:none">📊 派工統計</button>
   <button id="adminTab" onclick="showPage('adminPage')" style="background:#1a1a2e;color:#e94560;border-left:3px solid #e94560;">🔒 後台管理</button>
 </div>
@@ -1856,6 +1900,11 @@ body.force-admin-scroll #statsPage .log-table-wrap th{
 </div>
 
 <div id="schedulePage" class="page active">
+  <div class="schedule-subtabs">
+    <button id="subtabCalendar" class="schedule-subtab-btn active" onclick="switchScheduleSubtab('calendar')">🗓️ 派工行事曆</button>
+    <button id="subtabOutsource" class="schedule-subtab-btn" onclick="switchScheduleSubtab('outsource')">📋 代工表</button>
+  </div>
+  <div id="scheduleCalendarView">
   <div class="toolbar">
     <input type="date" id="viewDate">
     <button id="schedulePrevBtn" onclick="moveSchedule(-1)">← 前7天</button>
@@ -1887,6 +1936,23 @@ body.force-admin-scroll #statsPage .log-table-wrap th{
   <div id="scheduleBottomScrollbar" class="schedule-bottom-scrollbar">
     <div id="scheduleBottomScrollbarThumb" class="schedule-bottom-scrollbar-thumb"></div>
   </div>
+  </div>
+  <div id="scheduleOutsourceView" style="display:none">
+    <div class="outsource-toolbar">
+      <strong>📋 代工表</strong>
+      <span class="os-hint">完成案件會自動從進行中隱藏，可切到「已完成」查看。</span>
+      <button id="osActiveViewBtn" class="os-view-btn active" onclick="setOutsourceView('active')">進行中 <span id="osActiveCount" class="os-view-count">0</span></button>
+      <button id="osCompletedViewBtn" class="os-view-btn completed" onclick="setOutsourceView('completed')">已完成 <span id="osCompletedCount" class="os-view-count">0</span></button>
+      <input id="osSearch" placeholder="搜尋客代姓名 / 代工 / 內容" style="min-width:220px" oninput="renderOutsourceTable()">
+      <button onclick="document.getElementById('outsourceExcelFile').click()" style="background:#2980b9">📥 一鍵匯入</button>
+      <input type="file" id="outsourceExcelFile" accept=".xlsx,.xls,.csv" style="display:none" onchange="importOutsourceExcel(event)">
+      <button onclick="clearOutsourceForm()" style="background:#888">清空新增列</button>
+    </div>
+    <div class="outsource-wrap">
+      <table class="outsource-table" id="outsourceTable"></table>
+    </div>
+    <datalist id="osCustomerCodeList"></datalist>
+  </div>
 </div>
 
 <div id="repairPage" class="page">
@@ -1907,9 +1973,14 @@ body.force-admin-scroll #statsPage .log-table-wrap th{
   <div class="repair-list" id="repairList"></div>
 </div>
 
-<div id="dispatchPage" class="page">
-  <div class="form-card">
+<div id="dispatchOverlay" class="dispatch-drawer-overlay" onclick="closeDispatchDrawer()"></div>
+<div id="dispatchPage" class="dispatch-drawer">
+  <div class="dispatch-drawer-header">
     <h3>新增 / 填寫派工資料</h3>
+    <button class="dispatch-drawer-close" onclick="closeDispatchDrawer()" title="關閉">✕</button>
+  </div>
+  <div class="dispatch-drawer-body">
+  <div class="form-card">
     <div class="help">
       輸入「客編」後會自動連結客戶資料，帶入客名、客人電話、縣市、區域、地址。地址可直接開 Google Maps。
     </div>
@@ -2008,6 +2079,7 @@ body.force-admin-scroll #statsPage .log-table-wrap th{
       </div>
       <div id="twoWeekList2"></div>
     </div>
+  </div>
   </div>
 </div>
 
@@ -2170,21 +2242,6 @@ body.force-admin-scroll #statsPage .log-table-wrap th{
   <div class="customer-table"><table id="jobListTable"></table></div>
 </div>
 
-
-<div id="outsourcePage" class="page">
-  <div class="outsource-toolbar">
-    <strong>📋 代工表</strong>
-    <span class="os-hint">完成案件會自動從進行中隱藏，可切到「已完成」查看。</span>
-    <button id="osActiveViewBtn" class="os-view-btn active" onclick="setOutsourceView('active')">進行中 <span id="osActiveCount" class="os-view-count">0</span></button>
-    <button id="osCompletedViewBtn" class="os-view-btn completed" onclick="setOutsourceView('completed')">已完成 <span id="osCompletedCount" class="os-view-count">0</span></button>
-    <input id="osSearch" placeholder="搜尋客代姓名 / 代工 / 內容" style="min-width:220px" oninput="renderOutsourceTable()">
-    <button onclick="clearOutsourceForm()" style="background:#888">清空新增列</button>
-  </div>
-  <div class="outsource-wrap">
-    <table class="outsource-table" id="outsourceTable"></table>
-  </div>
-  <datalist id="osCustomerCodeList"></datalist>
-</div>
 
 <script>
 const engineers=["林川閔","陳昱存","陳義強","鄧長益"];
@@ -3284,7 +3341,51 @@ function syncEndTimeByStart(){
 }
 
 
+function openDispatchDrawer(){
+  const panel=document.getElementById("dispatchPage");
+  const overlay=document.getElementById("dispatchOverlay");
+  if(panel) panel.classList.add("open");
+  if(overlay) overlay.classList.add("open");
+  document.body.classList.add("dispatch-drawer-lock");
+  if(typeof renderAvailableSlots==='function') renderAvailableSlots();
+}
+function closeDispatchDrawer(){
+  const panel=document.getElementById("dispatchPage");
+  const overlay=document.getElementById("dispatchOverlay");
+  if(panel) panel.classList.remove("open");
+  if(overlay) overlay.classList.remove("open");
+  document.body.classList.remove("dispatch-drawer-lock");
+}
+document.addEventListener("keydown", function(e){
+  if(e.key==="Escape"){
+    const panel=document.getElementById("dispatchPage");
+    if(panel && panel.classList.contains("open")) closeDispatchDrawer();
+  }
+});
+
+function switchScheduleSubtab(view){
+  const cal=document.getElementById("scheduleCalendarView");
+  const out=document.getElementById("scheduleOutsourceView");
+  const bC=document.getElementById("subtabCalendar");
+  const bO=document.getElementById("subtabOutsource");
+  if(view==="outsource"){
+    if(cal) cal.style.display="none";
+    if(out) out.style.display="block";
+    if(bC) bC.classList.remove("active");
+    if(bO) bO.classList.add("active");
+    if(typeof startOutsourceSync==='function') startOutsourceSync();
+    if(typeof renderOutsourceTable==='function') renderOutsourceTable();
+  } else {
+    if(cal) cal.style.display="";
+    if(out) out.style.display="none";
+    if(bO) bO.classList.remove("active");
+    if(bC) bC.classList.add("active");
+  }
+}
+
 function showPage(pageId){
+  if(pageId==="dispatchPage"){ openDispatchDrawer(); return; }
+  if(pageId==="outsourcePage"){ showPage("schedulePage"); switchScheduleSubtab("outsource"); return; }
   document.body.classList.toggle("admin-scroll-mode", pageId==="adminPage" || pageId==="statsPage");
   document.body.classList.toggle("cartridge-scroll-mode", pageId==="cartridgePage");
   document.body.classList.toggle("outsource-scroll-mode", pageId==="outsourcePage");
@@ -3337,7 +3438,6 @@ function showPage(pageId){
   document.getElementById(pageId).classList.add("active");
   document.querySelectorAll(".tabs button").forEach(b=>b.classList.remove("active"));
   if(pageId==="schedulePage")document.getElementById("tabSchedule").classList.add("active");
-  if(pageId==="dispatchPage"){document.getElementById("tabDispatch").classList.add("active");renderAvailableSlots();}
   if(pageId==="customerPage")document.getElementById("tabCustomer").classList.add("active");
   if(pageId==="listPage"){document.getElementById("tabList").classList.add("active");renderJobList();}
   if(pageId==="repairPage"){
@@ -3346,7 +3446,6 @@ function showPage(pageId){
     loadRepairRequests();
   }
   if(pageId==="cartridgePage"){const tb=document.getElementById("tabCartridge");if(tb)tb.classList.add("active");renderCartridgeTable();}
-  if(pageId==="outsourcePage"){const tb=document.getElementById("tabOutsource");if(tb)tb.classList.add("active");startOutsourceSync();renderOutsourceTable();}
   if(pageId==="leavePage"){const tb=document.getElementById("tabLeave");if(tb)tb.classList.add("active");if(typeof lpTypeChange==='function')lpTypeChange();renderLeaveListLP();}
   if(pageId==="statsPage"){
     const tb=document.getElementById("tabStats");
@@ -7212,7 +7311,27 @@ if(typeof showAdminPage === 'function'){
     <textarea id="reminderText"></textarea>
     <div class="reminder-actions">
       <button onclick="copyReminderText()" style="background:#218c74">複製內容</button>
+      <button onclick="openReminderTemplateEditor()" style="background:#8e44ad">✏️ 編輯格式</button>
       <button onclick="closeReminderModal()" style="background:#6c757d">關閉</button>
+    </div>
+  </div>
+</div>
+<div id="reminderTemplateModal" style="display:none;position:fixed;inset:0;z-index:1200;background:rgba(0,0,0,.45);align-items:center;justify-content:center;" onclick="if(event.target.id==='reminderTemplateModal')closeReminderTemplateEditor()">
+  <div style="background:#fff;width:min(640px,94vw);max-height:88vh;border-radius:8px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,.3)">
+    <div style="background:#2f3542;color:#fff;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;">
+      <span style="font-weight:bold">✏️ 編輯提醒訊息格式</span>
+      <button onclick="closeReminderTemplateEditor()" style="background:transparent;color:#fff;font-size:18px;padding:0 4px;">×</button>
+    </div>
+    <div style="padding:12px 16px;background:#fffbe6;border-bottom:1px solid #e1c542;font-size:13px;line-height:1.7;">
+      可用欄位代碼（會自動代入該筆派工的資料）：<br>
+      <code>{date}</code> 日期時間　<code>{workItem}</code> 服務內容　<code>{amount}</code> 應收款項　<code>{payment}</code> 付款方式　<code>{address}</code> 服務地址<br>
+      提醒：含 <code>{payment}</code> 的那一行，若該筆派工沒有填付款方式，會自動整行省略。
+    </div>
+    <textarea id="reminderTemplateText" style="flex:1;min-height:320px;border:0;padding:14px;font-size:14px;line-height:1.6;font-family:'Microsoft JhengHei',Arial,sans-serif;resize:vertical;white-space:pre-wrap;"></textarea>
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding:12px;background:#f8f9fa;flex-wrap:wrap;">
+      <button onclick="resetReminderTemplate()" style="background:#b33939">還原預設格式</button>
+      <button onclick="closeReminderTemplateEditor()" style="background:#6c757d">取消</button>
+      <button onclick="saveReminderTemplate()" style="background:#218c74">儲存</button>
     </div>
   </div>
 </div>
@@ -7337,25 +7456,70 @@ if(typeof showAdminPage === 'function'){
   function weekday(dateStr){ const d=new Date(String(dateStr||'').replace(/-/g,'/')); const arr=['日','一','二','三','四','五','六']; return isNaN(d)?'':arr[d.getDay()]; }
   function md(dateStr){ const p=String(dateStr||'').split('-'); return p.length>=3 ? (Number(p[1])+'/'+Number(p[2])) : String(dateStr||''); }
   function money(v){ const s=String(v||'').trim(); if(!s) return ''; const n=Number(s.replace(/,/g,'')); return isNaN(n)?s:(n.toLocaleString('zh-TW')+' 元'); }
+  const DEFAULT_REMINDER_TEMPLATE =
+    '您好，這邊提醒您有預約\n'
+    + '📅 {date}\n'
+    + '🔧 服務內容：{workItem}\n'
+    + '💰 應收款項：{amount}\n'
+    + '💳 {payment}\n'
+    + '📍 服務地址：{address}\n'
+    + '—\n'
+    + '⚠️ 當日取消案件會有$600的空趟費，於取消後下趟服務收取，請務必確認時間正確!\n'
+    + '⚠️若遇颱風假當日不會前往服務!客服會在下一個上班日陸續改約時間\n'
+    + '⚠️如有其他問題或需改約其他日期，請提早通知。\n'
+    + '—\n'
+    + '因工程前一日已排定整日行程，當日件無法變更時段，以上確認後無法臨時變更喔！\n'
+    + '如有其他問題或需改約其他日期，請提早通知。\n'
+    + '確認正確請再傳個貼圖～謝謝！😊';
+  const REMINDER_TEMPLATE_KEY = 'reminderTemplate';
+  function getReminderTemplate(){
+    try{ return localStorage.getItem(REMINDER_TEMPLATE_KEY) || DEFAULT_REMINDER_TEMPLATE; }
+    catch(e){ return DEFAULT_REMINDER_TEMPLATE; }
+  }
+  let _currentReminderJobId = null;
   function reminderMessage(j){
     const dateLine = (j.date? md(j.date)+'（'+weekday(j.date)+'）':'') + (j.startTime ? ' '+j.startTime : '');
-    return '您好，這邊提醒您有預約\n'
-      + '📅 ' + dateLine.trim() + '\n'
-      + '🔧 服務內容：' + (j.workItem||'') + '\n'
-      + '💰 應收款項：' + money(j.amount) + '\n'
-      + (j.payment ? '💳 ' + j.payment + '\n' : '')
-      + '📍 服務地址：' + (j.address||'') + '\n'
-      + '—\n'
-      + '⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️\n'
-      + '❗ 當日取消案件會有$600的空趟費，於取消後下趟服務收取，請務必確認時間正確! ❗\n'
-      + '⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️\n'
-      + '—\n'
-      + '因工程前一日已排定整日行程，當日件無法變更時段，以上確認後無法臨時變更喔！\n'
-      + '如有其他問題或需改約其他日期，請提早通知。\n'
-      + '確認正確請再傳個貼圖～謝謝！😊';
+    const values = {
+      date: dateLine.trim(),
+      workItem: j.workItem||'',
+      amount: money(j.amount),
+      payment: j.payment||'',
+      address: j.address||''
+    };
+    let lines = getReminderTemplate().split('\n');
+    lines = lines.filter(line => !(line.indexOf('{payment}')>=0 && !values.payment));
+    return lines.map(line => line.replace(/\{(date|workItem|amount|payment|address)\}/g, (m,k)=>values[k])).join('\n');
   }
-  window.showReminderPreview = function(id,ev){ if(ev){ev.preventDefault();ev.stopPropagation();} const j=window.findJobById(id); if(!j){alert('找不到這筆派工資料');return;} const modal=document.getElementById('reminderModal'); const txt=document.getElementById('reminderText'); if(txt) txt.value=reminderMessage(j); if(modal) modal.style.display='flex'; setTimeout(()=>txt&&txt.focus(),60); };
-  window.closeReminderModal=function(){ const m=document.getElementById('reminderModal'); if(m) m.style.display='none'; };
+  window.openReminderTemplateEditor = function(){
+    const ta = document.getElementById('reminderTemplateText');
+    if(ta) ta.value = getReminderTemplate();
+    const m = document.getElementById('reminderTemplateModal');
+    if(m) m.style.display = 'flex';
+  };
+  window.closeReminderTemplateEditor = function(){
+    const m = document.getElementById('reminderTemplateModal');
+    if(m) m.style.display = 'none';
+  };
+  window.saveReminderTemplate = function(){
+    const ta = document.getElementById('reminderTemplateText');
+    if(!ta) return;
+    try{ localStorage.setItem(REMINDER_TEMPLATE_KEY, ta.value); }catch(e){}
+    window.closeReminderTemplateEditor();
+    if(_currentReminderJobId!=null){
+      const j = window.findJobById(_currentReminderJobId);
+      const txt = document.getElementById('reminderText');
+      if(j && txt) txt.value = reminderMessage(j);
+    }
+    if(typeof showToast==='function') showToast('✅ 已儲存提醒訊息格式'); else alert('已儲存提醒訊息格式');
+  };
+  window.resetReminderTemplate = function(){
+    if(!confirm('確定要還原為預設格式嗎？目前編輯內容將被覆蓋。')) return;
+    try{ localStorage.removeItem(REMINDER_TEMPLATE_KEY); }catch(e){}
+    const ta = document.getElementById('reminderTemplateText');
+    if(ta) ta.value = DEFAULT_REMINDER_TEMPLATE;
+  };
+  window.showReminderPreview = function(id,ev){ if(ev){ev.preventDefault();ev.stopPropagation();} const j=window.findJobById(id); if(!j){alert('找不到這筆派工資料');return;} _currentReminderJobId=id; const modal=document.getElementById('reminderModal'); const txt=document.getElementById('reminderText'); if(txt) txt.value=reminderMessage(j); if(modal) modal.style.display='flex'; setTimeout(()=>txt&&txt.focus(),60); };
+  window.closeReminderModal=function(){ const m=document.getElementById('reminderModal'); if(m) m.style.display='none'; _currentReminderJobId=null; };
   window.copyReminderText=async function(){ const txt=document.getElementById('reminderText'); if(!txt) return; txt.select(); try{ await navigator.clipboard.writeText(txt.value); alert('已複製提醒內容'); }catch(e){ document.execCommand('copy'); alert('已複製提醒內容'); } };
 
   document.addEventListener('keydown',e=>{ if(e.key==='Escape') window.closeReminderModal(); });
@@ -9946,16 +10110,16 @@ if(cartridgeData.length){
 }
 
 /* 派工頁：工具列、統計列、代號說明、圖例都縮小一點，把空間讓給表格 */
-#schedulePage > .toolbar{
+#scheduleCalendarView > .toolbar{
   padding:6px 10px !important;
   gap:6px !important;
 }
-#schedulePage > .toolbar input,
-#schedulePage > .toolbar button{
+#scheduleCalendarView > .toolbar input,
+#scheduleCalendarView > .toolbar button{
   padding:5px 9px !important;
   font-size:12.5px !important;
 }
-#schedulePage > .summary{
+#scheduleCalendarView > .summary{
   margin:6px 12px !important;
   padding:6px 10px !important;
   font-size:12.5px !important;
@@ -10072,8 +10236,8 @@ body:has(#schedulePage.page.active) .week-schedule-table td.time-col{
 }
 
 /* 工具列改成黏在瀏覽器視窗頂端，往下捲時仍看得到操作按鈕 */
-body.schedule-scroll-mode #schedulePage > .toolbar,
-body:has(#schedulePage.page.active) #schedulePage > .toolbar{
+body.schedule-scroll-mode #scheduleCalendarView > .toolbar,
+body:has(#schedulePage.page.active) #scheduleCalendarView > .toolbar{
   position:sticky !important;
   top:0 !important;
   z-index:30 !important;
@@ -10750,6 +10914,150 @@ async function persistOutsourceRow(row){
   const col=outsourceCollection();
   if(!col) return;
   try{ await col.doc(row.id).set(row,{merge:true}); }catch(e){ console.warn("代工表雲端儲存失敗，已保留本機資料",e); }
+}
+
+// ===== 代工表：Excel/CSV 一鍵匯入 =====
+function findOutsourceSheet(workbook){
+  let best=null;
+  workbook.SheetNames.forEach(sheetName=>{
+    const sheet=workbook.Sheets[sheetName];
+    const rows=XLSX.utils.sheet_to_json(sheet,{header:1,defval:"",raw:true});
+    for(let r=0;r<Math.min(rows.length,30);r++){
+      const headers=rows[r]||[];
+      const idx={
+        date:findHeaderIndex(headers,["日期","預約日期"]),
+        time:findHeaderIndex(headers,["預約時間","時間"]),
+        customerCombined:findHeaderIndex(headers,["客代姓名","客戶姓名","客代/客名","客戶"]),
+        customerCode:findHeaderIndex(headers,["客代","客代編號","客戶編號","客編"]),
+        customerName:findHeaderIndex(headers,["客名","姓名","客戶名稱"]),
+        city:findHeaderIndex(headers,["縣市","城市"]),
+        district:findHeaderIndex(headers,["地區","區域","鄉鎮區"]),
+        address:findHeaderIndex(headers,["地址","服務地址","施工地址"]),
+        vendor:findHeaderIndex(headers,["代工","代工廠商","廠商"]),
+        printed:findHeaderIndex(headers,["印單"]),
+        shipDate:findHeaderIndex(headers,["寄出日期","出貨日期"]),
+        tracking:findHeaderIndex(headers,["貨運單","貨運單號","物流單號"]),
+        photo:findHeaderIndex(headers,["拍單"]),
+        completed:findHeaderIndex(headers,["完成"]),
+        service:findHeaderIndex(headers,["服務項目","項目"]),
+        content:findHeaderIndex(headers,["內容","備註","機型"])
+      };
+      let score=0;
+      [idx.date,idx.customerCombined,idx.customerCode,idx.customerName,idx.address,idx.vendor,idx.content].forEach(v=>{if(v>=0)score++});
+      if(score>=3 && (!best || score>best.score)){
+        best={sheetName,rows,headerRow:r,headers,idx,score};
+      }
+    }
+  });
+  return best;
+}
+function osTruthyCell(v){
+  const s=String(v==null?"":v).trim().toLowerCase();
+  if(!s) return false;
+  return ["v","✓","☑","是","true","1","yes","y","已","o"].includes(s);
+}
+function normalizeOutsourceFromArray(row, idx){
+  const get=(key)=>idx[key]>=0 ? row[idx[key]] : "";
+  let customerCode=String(get("customerCode")||"").trim();
+  let customerName=String(get("customerName")||"").trim();
+  const combined=String(get("customerCombined")||"").trim();
+  if(combined && !customerCode && !customerName){
+    const parts=combined.split(/\s+/);
+    customerCode=parts.shift()||"";
+    customerName=parts.join(" ");
+  }
+  let city=String(get("city")||"").trim();
+  let district=String(get("district")||"").trim();
+  let address=String(get("address")||"").trim();
+  // 地址/縣市/地區沒填時，依客代去客戶資料庫自動帶入（跟手動新增邏輯一致）
+  if(customerCode && (!address || !customerName)){
+    const cust=(customers||[]).find(c=>String(c.customerNo||"").trim().toLowerCase()===customerCode.toLowerCase());
+    if(cust){
+      if(!customerName) customerName=cust.fullName||cust.shortName||cust.personName||"";
+      if(!address) address=cust.deliveryAddress||"";
+    }
+  }
+  if(address && (!city || !district)){
+    const p=parseTaiwanAddress(address);
+    if(!city) city=p.city||"";
+    if(!district) district=p.district||"";
+  }
+  return {
+    id:"os_import_"+Date.now()+"_"+Math.random().toString(36).slice(2,8),
+    date:normalizeExcelDate(get("date")),
+    time:normalizeExcelTime(get("time")),
+    customerCode,customerName,
+    customer:[customerCode,customerName].filter(Boolean).join(" "),
+    city,district,address,
+    vendor:String(get("vendor")||"").trim(),
+    printed:osTruthyCell(get("printed")),
+    shipDate:normalizeExcelDate(get("shipDate")),
+    tracking:String(get("tracking")||"").trim(),
+    photo:osTruthyCell(get("photo")),
+    completed:osTruthyCell(get("completed")),
+    service:String(get("service")||"").trim()||"換芯",
+    content:String(get("content")||"").trim(),
+    updatedAt:new Date().toISOString()
+  };
+}
+function importOutsourceExcel(event){
+  if(!requireEdit("匯入代工表")){ if(event&&event.target) event.target.value=""; return; }
+  const file=event && event.target && event.target.files ? event.target.files[0] : null;
+  if(!file) return;
+  if(typeof XLSX==="undefined"){
+    alert("Excel 讀取套件沒有載入成功，請確認有網路後再重新整理網頁。");
+    return;
+  }
+  const reader=new FileReader();
+  reader.onload=async function(e){
+    try{
+      const data=new Uint8Array(e.target.result);
+      const wb=XLSX.read(data,{type:"array",cellDates:false});
+      const found=findOutsourceSheet(wb);
+      if(!found){
+        alert("找不到可匯入的代工表欄位。請確認 Excel 有日期、客代姓名、代工、地址、內容等欄位。");
+        event.target.value="";
+        return;
+      }
+      const replaceOld=confirm("匯入代工表資料：\n\n按「確定」＝清空目前代工表後重新匯入\n按「取消」＝保留現有資料並追加匯入");
+      let count=0, skipped=0;
+      const importedRows=[];
+      for(let r=found.headerRow+1;r<found.rows.length;r++){
+        const row=found.rows[r]||[];
+        const item=normalizeOutsourceFromArray(row,found.idx);
+        if(!item.date && !item.customer && !item.vendor && !item.content){
+          skipped++;
+          continue;
+        }
+        importedRows.push(item);
+        count++;
+      }
+      if(count===0){
+        alert("Excel 裡沒有找到可匯入的資料列。");
+        event.target.value="";
+        return;
+      }
+      if(replaceOld){
+        outsourceRows=importedRows;
+      }else{
+        outsourceRows=outsourceRows.concat(importedRows);
+      }
+      outsourceRows.sort((a,b)=>String(a.date||"").localeCompare(String(b.date||""))||String(a.time||"").localeCompare(String(b.time||"")));
+      saveOutsourceLocal();
+      renderOutsourceTable();
+      const col=outsourceCollection();
+      if(col){
+        importedRows.forEach(row=>{ try{ col.doc(row.id).set(row,{merge:true}); }catch(err){ console.warn(err); } });
+      }
+      alert(`已匯入 ${count} 筆代工資料${replaceOld?"（已先清空舊代工表）":"（追加匯入）"}${skipped?`，略過 ${skipped} 筆空白資料`:""}。\n\n來源工作表：${found.sheetName}，標題列：第 ${found.headerRow+1} 列。`);
+      event.target.value="";
+    }catch(err){
+      console.error(err);
+      alert("匯入失敗："+(err.message||err));
+      event.target.value="";
+    }
+  };
+  reader.readAsArrayBuffer(file);
 }
 async function removeOutsourceRow(id){
   outsourceRows=outsourceRows.filter(r=>r.id!==id); saveOutsourceLocal(); renderOutsourceTable();
