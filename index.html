@@ -2058,7 +2058,7 @@ body.force-admin-scroll #statsPage .log-table-wrap th{
       <option>🔵 已派工</option>
       <option>🟣 送修中</option>
       <option>🟢 待復機</option>
-      <option>⚫ 已完成</option>
+      
     </select>
     <input type="date" id="rtDateFilter" onchange="renderRepairTicketList()" title="報修日期篩選">
     <button style="background:#888" onclick="document.getElementById('rtDateFilter').value='';renderRepairTicketList()">清除日期</button>
@@ -11668,11 +11668,11 @@ function renderRepairTicketStats(){
   const counts = {};
   RT_STATUSES.forEach(s => counts[s] = 0);
   repairTickets.forEach(t => {
-    const s = t.status || "🔵 已派工";
+    const s = t.completeDate ? "⚫ 已完成" : (t.status || rtComputeStatus(t));
     if(counts[s] === undefined) counts[s] = 0;
     counts[s]++;
   });
-  box.innerHTML = RT_STATUSES.map(s => {
+  box.innerHTML = RT_STATUSES.filter(s => s !== "⚫ 已完成").map(s => {
     const active = curFilter === s;
     return `<div class="rt-stat-card${active ? " active" : ""}" onclick="rtFilterByStat(${jsStr(s)})">
       <div class="rt-stat-num">${counts[s] || 0}</div>
@@ -11694,7 +11694,8 @@ function renderRepairTicketList(){
   const dateFilter = (document.getElementById("rtDateFilter")||{}).value || "";
 
   const list = repairTickets.filter(t => {
-    const statusOk = statusFilter === "全部" || (t.status || "🔵 已派工") === statusFilter;
+    const status = t.completeDate ? "⚫ 已完成" : (t.status || rtComputeStatus(t));
+    const statusOk = status !== "⚫ 已完成" && (statusFilter === "全部" || statusFilter === "⚫ 已完成" || status === statusFilter);
     const dateOk = !dateFilter || t.reportDate === dateFilter;
     const searchOk = !q || [t.customerCode, t.customerName, t.phone, t.machineCode]
       .join(" ").toLowerCase().includes(q);
@@ -11815,33 +11816,72 @@ function rtRepairDisplay(t){
   if(match){removeNote=match[1];remark=match[2]||'';}
   return {item:parts[0]||'-',condition:parts.length>1?parts.slice(1).join('｜'):(t.condition||'-'),remark,removeNote};
 }
+
+function rtInlineValue(t,key){
+  if(key==='remark'||key==='removeNote')return rtRepairDisplay(t)[key]||'';
+  if(key==='loaner')return t.needNewLoaner?'new':t.needLoaner?'yes':'';
+  return String(t[key]||'');
+}
+function rtTextInlineHtml(t,key,label,multiline=false){
+  const value=rtInlineValue(t,key),attrs=`class="rt-inline-edit" aria-label="${repairEsc(t.customerCode+' '+label)}" ${canEdit()?'':'disabled'} onblur="updateRepairTicketFieldInline(${jsStr(t.id)},'${key}',this)"`;
+  return `<label class="rt-inline-field"><span>${label}：</span>${multiline?`<textarea ${attrs} rows="4">${repairEsc(value)}</textarea>`:`<input ${attrs} value="${repairEsc(value)}" placeholder="—">`}</label>`;
+}
+function rtSelectInlineHtml(t,key,label,options){
+  const value=rtInlineValue(t,key),choices=[...options];if(!choices.some(([v])=>v===value))choices.push([value,value]);
+  return `<label class="rt-inline-field"><span>${label}：</span><select class="rt-inline-edit" aria-label="${repairEsc(t.customerCode+' '+label)}" ${canEdit()?'':'disabled'} onchange="updateRepairTicketFieldInline(${jsStr(t.id)},'${key}',this)">${choices.map(([v,l])=>`<option value="${repairEsc(v)}" ${v===value?'selected':''}>${repairEsc(l)}</option>`).join('')}</select></label>`;
+}
+function rtHandlingInlineHtml(t){return '<div class="rt-handling-inline">'+rtSelectInlineHtml(t,'warranty','保固',[['','—'],['保內','保內'],['保外','保外']])+rtSelectInlineHtml(t,'handlingMethod','處理',[['','—'],['現場維修','現場維修'],['拆機','拆機'],['其他','其他']])+rtTextInlineHtml(t,'removeNote','拆機')+rtSelectInlineHtml(t,'loaner','備機',[['','無'],['yes','需要'],['new','備新機']])+'</div>';}
+async function updateRepairTicketFieldInline(id,key,input){
+  if(!['warranty','handlingMethod','removeNote','loaner','remark'].includes(key))return;
+  const ticket=repairTickets.find(t=>t.id===id);if(!ticket)return;
+  const before=rtInlineValue(ticket,key),value=input.value.trim();if(before===value||input.dataset.saving==='1')return;
+  if(!requireEdit('修改報修資訊')||!firebaseDb){input.value=before;return;}
+  input.dataset.saving='1';input.disabled=true;
+  try{
+    const patch=await firebaseDb.runTransaction(async tx=>{
+      const ref=firebaseDb.collection('repairTickets').doc(id),snap=await tx.get(ref);if(!snap.exists)throw Error('案件已不存在');
+      const latest=snap.data();if(rtInlineValue(latest,key)!==before)throw Error('此欄位已由其他使用者更新，請重新讀取後修改。');
+      const data=key==='loaner'?{needLoaner:!!value,needNewLoaner:value==='new'}:{[key]:value};
+      if(key==='remark'||key==='removeNote'){
+        const display=rtRepairDisplay(latest),meta=rtSplitRepairMeta(latest);
+        data.remark=key==='remark'?value:display.remark;
+        data.removeNote=key==='removeNote'?value:display.removeNote;
+        if(!latest.source&&meta.source)data.source=meta.source;
+      }
+      data.status=rtComputeStatus({...latest,...data});
+      tx.update(ref,{...data,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});return data;
+    });
+    Object.assign(ticket,patch);renderRepairTicketStats();renderRepairTicketList();updateRepairTicketPendingBadge();showToast('✅ 已儲存');
+  }catch(error){input.value=before;alert('儲存失敗：'+error.message);}
+  finally{input.disabled=!canEdit();delete input.dataset.saving;}
+}
+
 function renderRepairTicketTable(list){
   const table=document.getElementById('rtTable');if(!table)return;
-  const headers=['狀態／報修日','客戶資料','機型／機碼','報修內容','處理資訊','來源','日期追蹤','備註／操作'];
+  const headers=['狀態／報修日','客戶資料','報修內容','處理資訊','來源','日期追蹤','備註／操作'];
   let html='<tr>'+headers.map(h=>'<th>'+h+'</th>').join('')+'</tr>';
   for(const t of list){
     const d=rtRepairDisplay(t),status=t.status||'🔵 已派工';
     html+=`<tr>
       <td>${rtStatusSelectHtml(t)}<div class="rt-cell-sub rt-nowrap">${repairEsc(t.reportDate||'-')}</div></td>
-      <td><strong class="rt-customer-code">${repairEsc(t.customerCode||'-')}</strong><div>${repairEsc(t.customerName||'-')}</div><div class="rt-cell-sub">${t.address?`<a href="${mapUrl(t.address)}" target="_blank" rel="noopener">${repairEsc(t.address)}</a>`:'-'}</div></td>
-      <td><strong>${repairEsc(t.model||'-')}</strong><div class="rt-cell-sub">${repairEsc(t.machineCode||'-')}</div></td>
+      <td><strong class="rt-customer-code">${repairEsc(t.customerCode||'-')}</strong><div>${repairEsc(t.customerName||'-')}</div><div class="rt-cell-sub">${t.address?`<a href="${mapUrl(t.address)}" target="_blank" rel="noopener">${repairEsc(t.address)}</a>`:'-'}</div><div class="rt-cell-sub">機型：${repairEsc(t.model||'-')}</div><div class="rt-cell-sub">機碼：${repairEsc(t.machineCode||'-')}</div></td>
       <td><span class="rt-item-chip">${repairEsc(d.item)}</span><div class="rt-cell-sub">${repairEsc(d.condition)}</div></td>
-      <td><div>保固：${repairEsc(t.warranty||'-')}</div><div>處理：${repairEsc(t.handlingMethod||'-')}</div><div>拆機：${repairEsc(d.removeNote||'-')}</div><div>備機：${t.needLoaner?'✓':'-'}${t.needNewLoaner?'／備新機':''}</div></td>
+      <td>${rtHandlingInlineHtml(t)}</td>
       <td>${rtSourceHtml(t)}</td>
       <td>${rtDateInputHtml(t,'appointmentDate','預約日期')}${rtDateInputHtml(t,'returnDate','機回日期')}${rtDateInputHtml(t,'completeDate','完成日期')}</td>
-      <td><div class="rt-note-text">${repairEsc(d.remark||'-')}</div><div class="rt-record-actions"><button onclick="openRepairTicketDrawer(${jsStr(t.id)})">✏️ 編輯</button>${status==='🟢 待復機'?`<button onclick="repairTicketCreateDispatch(${jsStr(t.id)})">📅 建立派工</button>`:''}</div></td>
+      <td>${rtTextInlineHtml(t,'remark','備註',true)}<div class="rt-record-actions"><button onclick="openRepairTicketDrawer(${jsStr(t.id)})">✏️ 編輯</button>${status==='🟢 待復機'?`<button onclick="repairTicketCreateDispatch(${jsStr(t.id)})">📅 建立派工</button>`:''}</div></td>
     </tr>`;
   }
-  if(!list.length)html+='<tr><td colspan="8" class="rt-empty">目前沒有符合條件的報修案件，可在上方新增。</td></tr>';
+  if(!list.length)html+='<tr><td colspan="7" class="rt-empty">目前沒有符合條件的報修案件，可在上方新增。</td></tr>';
   if(typeof window.rtFastRender==='function')window.rtFastRender(table,html);else table.innerHTML=html;
 }
 function renderRepairTicketCards(list){
   const box=document.getElementById('rtCards');if(!box)return;
   box.innerHTML=list.length?list.map(t=>{const d=rtRepairDisplay(t);return `<article class="rt-card" style="border-left-color:${RT_STATUS_COLORS[t.status]||'#777'}">
     <div class="rt-card-top"><div><strong class="rt-card-title">${repairEsc([t.customerCode,t.customerName].filter(Boolean).join(' ')||'未填客戶')}</strong><div class="rt-card-meta">報修：${repairEsc(t.reportDate||'-')}</div></div>${rtStatusSelectHtml(t)}</div>
-    <div class="rt-card-grid"><div><b>機型：</b>${repairEsc(t.model||'-')}</div><div><b>機碼：</b>${repairEsc(t.machineCode||'-')}</div><div><b>項目：</b>${repairEsc(d.item)}</div><div><b>機況：</b>${repairEsc(d.condition)}</div><div><b>保固：</b>${repairEsc(t.warranty||'-')}</div><div><b>處理：</b>${repairEsc(t.handlingMethod||'-')}</div><div><b>拆機：</b>${repairEsc(d.removeNote||'-')}</div><div><b>備機：</b>${t.needLoaner?'需要':'無'}${t.needNewLoaner?'／備新機':''}</div><div class="rt-card-wide"><b>地址：</b>${t.address?`<a href="${mapUrl(t.address)}" target="_blank" rel="noopener">${repairEsc(t.address)}</a>`:'-'}</div><div class="rt-card-wide"><b>來源：</b>${rtSourceHtml(t)}</div></div>
+    <div class="rt-card-grid"><div><b>機型：</b>${repairEsc(t.model||'-')}</div><div><b>機碼：</b>${repairEsc(t.machineCode||'-')}</div><div><b>項目：</b>${repairEsc(d.item)}</div><div><b>機況：</b>${repairEsc(d.condition)}</div><div class="rt-card-wide">${rtHandlingInlineHtml(t)}</div><div class="rt-card-wide"><b>地址：</b>${t.address?`<a href="${mapUrl(t.address)}" target="_blank" rel="noopener">${repairEsc(t.address)}</a>`:'-'}</div><div class="rt-card-wide"><b>來源：</b>${rtSourceHtml(t)}</div></div>
     <div class="rt-card-dates">${rtDateInputHtml(t,'appointmentDate','預約日期')}${rtDateInputHtml(t,'returnDate','機回日期')}${rtDateInputHtml(t,'completeDate','完成日期')}</div>
-    <div class="rt-note-text"><b>備註：</b>${repairEsc(d.remark||'-')}</div><div class="rt-record-actions"><button onclick="openRepairTicketDrawer(${jsStr(t.id)})">✏️ 編輯</button>${t.status==='🟢 待復機'?`<button onclick="repairTicketCreateDispatch(${jsStr(t.id)})">📅 建立派工</button>`:''}</div></article>`;}).join(''):'<div class="help">目前沒有符合條件的報修案件。</div>';
+    ${rtTextInlineHtml(t,'remark','備註',true)}<div class="rt-record-actions"><button onclick="openRepairTicketDrawer(${jsStr(t.id)})">✏️ 編輯</button>${t.status==='🟢 待復機'?`<button onclick="repairTicketCreateDispatch(${jsStr(t.id)})">📅 建立派工</button>`:''}</div></article>`;}).join(''):'<div class="help">目前沒有符合條件的報修案件。</div>';
 }
 
 setTimeout(() => {
@@ -12502,6 +12542,14 @@ function renderOutsourceTable(){
 }
 
 </script>
+
+<style id="repair-inline-layout">
+body.ops-shell #rtTable th:nth-child(1){width:10%}body.ops-shell #rtTable th:nth-child(2){width:23%}body.ops-shell #rtTable th:nth-child(3){width:12%}body.ops-shell #rtTable th:nth-child(4){width:15%}body.ops-shell #rtTable th:nth-child(5){width:8%}body.ops-shell #rtTable th:nth-child(6){width:16%}body.ops-shell #rtTable th:nth-child(7){width:16%}
+body.ops-shell .rt-inline-field{display:flex;align-items:start;gap:4px;margin:0 0 7px;min-width:0;color:#60758c;font-size:14px}
+body.ops-shell .rt-inline-field>span{flex:none;line-height:30px}body.ops-shell .rt-inline-edit{box-sizing:border-box;display:block;min-width:0!important;width:100%;max-width:100%;padding:5px!important;border:1px solid #d5e0ec;border-radius:5px;color:#294762;background:#fff;font:inherit;line-height:1.5}
+body.ops-shell textarea.rt-inline-edit{resize:vertical;min-height:100px}body.ops-shell .rt-inline-field:has(textarea){display:block}body.ops-shell .rt-inline-edit:focus{outline:2px solid #a9c8eb;outline-offset:1px}.rt-inline-edit:disabled{background:#f4f7fa}
+</style>
+
 </body>
 </html>
 
