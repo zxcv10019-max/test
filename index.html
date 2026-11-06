@@ -5167,7 +5167,7 @@ function renderCustomers(){
   const kw=(searchEl ? searchEl.value.trim().toLowerCase() : "");
   const terms=kw.split(/\s+/).filter(Boolean);
   const list=customers.filter(c=>{
-    const text=`${c.customerNo||""} ${c.personName||""} ${c.fullName||""} ${c.shortName||""} ${c.mobile||""} ${c.deliveryAddress||""}`.toLowerCase();
+    const text=`${c.customerNo||""} ${c.personName||""} ${c.fullName||""} ${c.shortName||""} ${c.mobile||""} ${c.deliveryAddress||""} ${(c.machineCodes||[]).join(' ')}`.toLowerCase();
     return terms.length===0 || terms.every(t=>text.includes(t));
   }).sort((a,b)=>compareCustomerCode(a.customerNo, b.customerNo));
 
@@ -11132,6 +11132,7 @@ function fillRepairCustomerByCode(){
     document.getElementById("rtPhone").value = c.mobile || "";
     document.getElementById("rtAddress").value = c.deliveryAddress || "";
   }
+  if(typeof configureMachineInput==='function')configureMachineInput('rtMachineCode',code);
   renderRepairHistory();
 }
 
@@ -11221,6 +11222,7 @@ function openRepairTicketDrawer(ticketId){
     document.getElementById("rtResult").value = t.result || "";
     document.getElementById("rtRemark").value = rtSplitRepairMeta(t).remark;
     document.getElementById("rtSource").value = rtSplitRepairMeta(t).source;
+    if(typeof configureMachineInput==='function')configureMachineInput('rtMachineCode',t.customerCode,true);
     document.getElementById("rtStatus").value = t.status || "🔵 已派工";
     document.getElementById("rtCreatedByDisplay").value = t.createdBy || "";
     document.getElementById("rtCreatedAtDisplay").value = repairDate(t.createdAt);
@@ -11357,7 +11359,7 @@ async function saveRepairTicket(){
     result: g("rtResult").trim(),
     remark: g("rtRemark").trim(),
     source: g("rtSource"),
-    status: g("rtStatus") || "🔵 已派工",
+    status: rtComputeStatus({appointmentDate:g('rtAppointmentDate'),returnDate:g('rtReturnDate'),completeDate:g('rtCompleteDate')}),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   };
 
@@ -11767,14 +11769,8 @@ async function updateRepairTicketStatusInline(ticketId, newStatus){
   }
 }
 function rtStatusSelectHtml(t){
-  const status = t.status || "🔵 已派工";
-  const color = RT_STATUS_COLORS[status] || "#777";
-  const options = RT_STATUSES.map(s =>
-    `<option value="${repairEsc(s)}"${s===status?" selected":""}>${repairEsc(s)}</option>`
-  ).join("");
-  return `<select class="rt-status-select" style="border-color:${color};color:${color}"
-    onclick="event.stopPropagation()"
-    onchange="event.stopPropagation();updateRepairTicketStatusInline(${jsStr(t.id)},this.value)">${options}</select>`;
+  const status=rtComputeStatus(t),color=RT_STATUS_COLORS[status]||'#777';
+  return `<span class="rt-status-badge" style="color:${color};border-color:transparent;background:#edf3fa">${repairEsc(status)}</span>`;
 }
 
 // Existing imports kept source inside notes. Read it separately without rewriting old records.
@@ -13809,7 +13805,7 @@ const showBefore=showPage;showPage=function(id){if(['opsTaskPage','opsActivityPa
 window.opsStatsCases=function(month,engineer,item,excludeM=false){if(!allowed())return;const list=jobs.filter(j=>!isHoldJob(j)&&isValidJob(j)&&String(j.date||'').startsWith(month)&&(!engineer||normalizeEngineerName(j.engineer)===normalizeEngineerName(engineer))&&(!item||String(j.workItem||'未填施工項目')===item)&&(!excludeM||['E','C','Y'].includes(displayEngineer(normalizeEngineerName(j.engineer)))));const daily=new Map();for(const j of list)daily.set(j.date,(daily.get(j.date)||0)+1);open('統計核對明細',`<p>${esc(month)} · ${esc(engineer||item||'E、C、Y 合計')}<br>共 ${list.length} 件，${daily.size} 個有有效派工的日期；平均每日 ${daily.size?(list.length/daily.size).toFixed(2):'0.00'} 件。${excludeM?'不含林川閔。':''}</p><details><summary>查看每日件數</summary>${table(['日期','件數'],[...daily].sort().map(([d,n])=>`<tr><td>${esc(d)}</td><td>${n}</td></tr>`))}</details>${jobTable(list.sort((a,b)=>String(a.date).localeCompare(String(b.date))))}`);};
 const workloadBefore=renderAdminWorkloadSummary;renderAdminWorkloadSummary=function(){const result=workloadBefore.apply(this,arguments),month=adminMonthNow();for(const id of ['adminWorkloadSummary','statsWorkloadSummary']){const box=$(id);if(!box)continue;const tables=box.querySelectorAll('table');[...(tables[0]?.tBodies[0]?.rows||[])].forEach((row,i)=>{const c=row.cells[1],e=engineers[i];if(c&&e){const n=c.textContent;c.innerHTML='<button class="ops-case-link" type="button">'+esc(n)+'</button>';c.firstChild.onclick=()=>opsStatsCases(month,e,'',false);}});for(const row of tables[0]?.tFoot?.rows||[]){const c=row.cells[1],n=c.textContent;c.innerHTML='<button class="ops-case-link" type="button">'+esc(n)+'</button>';c.firstChild.onclick=()=>opsStatsCases(month,'','',true);}for(const row of tables[1]?.tBodies[0]?.rows||[]){if(row.cells.length!==2)continue;const item=row.cells[0].textContent,c=row.cells[1],n=c.textContent;c.innerHTML='<button class="ops-case-link" type="button">'+esc(n)+'</button>';c.firstChild.onclick=()=>opsStatsCases(month,'',item,false);}}return result;};
 const amountBefore=renderCompletionStats;renderCompletionStats=function(monthId,target){const result=amountBefore.apply(this,arguments),box=$(target||'adminCompletionContent');if(box){const button=document.createElement('button');button.type='button';button.className='ops-case-link';button.textContent='核對金額明細';button.onclick=()=>{const month=$(monthId||'statsMonth')?.value||adminMonthNow(),list=jobs.filter(j=>String(j.date||'').startsWith(month)&&!isHoldJob(j)&&isValidJob(j)),parse=v=>String(v??'').replace(/,/g,'').trim(),amountRows=list.filter(j=>parse(j.amount)!==''&&Number.isFinite(Number(parse(j.amount)))),sum=amountRows.reduce((n,j)=>n+Number(parse(j.amount)),0);open('本月金額核對',`<p>${esc(month)} · ${list.length} 件有效派工，${amountRows.length} 件已填金額，${list.length-amountRows.length} 件未填有效金額。<br>總金額 ${sum.toLocaleString('zh-TW')} 元；金額統計包含林川閔，工作量合計另依 E、C、Y 計算。</p>${jobTable(amountRows)}`);};box.prepend(button);}return result;};
-const permission=()=>{const yes=allowed();$('opsTaskPageTab').style.display=$('opsActivityPageTab').style.display=yes?'':'none';$('opsBatchToolbar').style.display=yes?'':'none';if(!yes){if(modal.open)close();$('opsTaskResults').innerHTML='';$('opsActivityResults').innerHTML='';selected.clear();}else baseline=clone(jobs);};new MutationObserver(permission).observe(document.body,{attributes:true,attributeFilter:['class']});permission();
+const permission=()=>{const yes=allowed();$('opsActivityPageTab').style.display=yes?'':'none';$('opsBatchToolbar').style.display=yes?'':'none';if(!yes){if(modal.open)close();$('opsTaskResults').innerHTML='';$('opsActivityResults').innerHTML='';selected.clear();}else baseline=clone(jobs);};new MutationObserver(permission).observe(document.body,{attributes:true,attributeFilter:['class']});permission();
 })();
 
 </script>
@@ -13837,10 +13833,10 @@ body.ops-shell #repairManagePage .rt-table-wrap{display:block!important}body.ops
  }
  window.rtFastRender=function(table,html){init(table);const temp=document.createElement('table');temp.innerHTML=html;table.tHead.innerHTML='<tr>'+temp.rows[0].innerHTML+'</tr>';const rows=[...temp.rows].slice(1);const body=$('rtFastRecordsBody');body.replaceChildren(...rows);$('rtFastAddBody').hidden=!canEdit();};
  function reset(){for(const key of Object.keys(fields)){const input=$('rtFast_'+key);if(input)input.value='';}$('rtFast_removeNote').value='';$('rtFast_status').value='🔵 已派工';$('rtFast_reportDate').value=formatDateLocal(new Date());retryRef=null;$('rtFastFeedback').textContent='新增列已清空。';}
- function fillCustomer(){const code=val('customerCode').trim().toUpperCase();const c=customers.find(c=>String(c.customerNo||'').trim().toUpperCase()===code);if(!code)return;if(!c){$('rtFastFeedback').textContent='查無此客編，可自行填寫客名、電話與地址。';return;}$('rtFast_customerCode').value=code;$('rtFast_customerName').value=c.fullName||c.shortName||c.personName||'';if($('rtFast_phone'))$('rtFast_phone').value=c.mobile||'';$('rtFast_address').value=c.deliveryAddress||'';$('rtFastFeedback').textContent='已帶入客戶資料，可自行修改。';}
+ function fillCustomer(){const code=val('customerCode').trim().toUpperCase();const c=customers.find(c=>String(c.customerNo||'').trim().toUpperCase()===code);if(!code)return;if(!c){$('rtFastFeedback').textContent='查無此客編，可自行填寫客名、電話與地址。';return;}$('rtFast_customerCode').value=code;$('rtFast_customerName').value=c.fullName||c.shortName||c.personName||'';if($('rtFast_phone'))$('rtFast_phone').value=c.mobile||'';$('rtFast_address').value=c.deliveryAddress||'';configureMachineInput('rtFast_machineCode',code);$('rtFastFeedback').textContent='已帶入客戶資料，可自行修改。';}
  function setBusy(value){busy=value;for(const el of $('rtFastAddBody').querySelectorAll('input,select,textarea,button'))el.disabled=value;$('rtFastSave').textContent=value?'儲存中…':'＋ 新增';}
  async function save(){if(busy||!requireEdit('新增報修單'))return;if(!firebaseDb){$('rtFastFeedback').textContent='尚未連線，請登入並連線後再新增；已保留填寫內容。';return;}if(!val('reportDate')){$('rtFastFeedback').textContent='請填寫報修日期。';$('rtFast_reportDate').focus();return;}if(!val('customerCode').trim()&&!val('customerName').trim()){$('rtFastFeedback').textContent='請至少輸入客戶代號或客戶名字。';$('rtFast_customerCode').focus();return;}const invalid=[...$('rtFastAddBody').querySelectorAll('input')].find(el=>!el.checkValidity());if(invalid){invalid.reportValidity();return;}
- const data={};for(const k of Object.keys(fields))data[k]=val(k).trim();data.needLoaner=val('needLoaner')==='yes';data.needNewLoaner=val('needNewLoaner')==='yes';if(val('removeNote'))data.remark='拆機：'+val('removeNote')+(data.remark?'｜'+data.remark:'');data.dispatchIds=[];data.createdBy=currentUser&&(currentUser.displayName||currentUser.email)||'';
+ const data={};for(const k of Object.keys(fields))data[k]=val(k).trim();data.status=rtComputeStatus(data);data.needLoaner=val('needLoaner')==='yes';data.needNewLoaner=val('needNewLoaner')==='yes';if(val('removeNote'))data.remark='拆機：'+val('removeNote')+(data.remark?'｜'+data.remark:'');data.dispatchIds=[];data.createdBy=currentUser&&(currentUser.displayName||currentUser.email)||'';
  const code=data.customerCode,name=data.customerName;setBusy(true);$('rtFastFeedback').textContent='正在新增報修單…';try{if(!retryRef)retryRef=firebaseDb.collection('repairTickets').doc();data.createdAt=firebase.firestore.FieldValue.serverTimestamp();data.updatedAt=firebase.firestore.FieldValue.serverTimestamp();await retryRef.set(data);const id=retryRef.id;if(!repairTickets.some(t=>t.id===id))repairTickets.push({...data,id});renderRepairTicketStats();renderRepairTicketList();reset();$('rtFastFeedback').textContent='已新增 '+[code,name].filter(Boolean).join(' ')+'。若列表未顯示，請確認目前的搜尋與篩選條件。';if(data.machineCode){try{const sync=syncMachineCodeToCustomer(data.customerCode,data.customerName,data.machineCode);if(sync&&typeof sync.catch==='function')sync.catch(()=>{$('rtFastFeedback').textContent+=' 客戶機碼補登失敗，可稍後重試；報修單已新增。';});}catch(e){$('rtFastFeedback').textContent+=' 客戶機碼未補登；報修單已新增。';}}showToast('✅ 已新增報修單');}catch(e){$('rtFastFeedback').textContent='新增失敗：'+(e.message||'請稍後重試')+'；已保留全部輸入內容，可再次按新增重試。';}finally{setBusy(false);}}
  window.focusRepairQuickAdd=function(){if(!requireEdit('新增報修單'))return;renderRepairTicketList();$('rtFastAddBody').scrollIntoView({behavior:'smooth',block:'center',inline:'start'});$('rtFast_customerCode').focus({preventScroll:true});};
  const trigger=$('repairManagePage').querySelector('button[onclick="openRepairTicketDrawer()"]');if(trigger){trigger.onclick=focusRepairQuickAdd;trigger.textContent='＋ 新增報修';}
@@ -13965,11 +13961,11 @@ function render(kind){const host=$('sv-'+kind);if(!host)return;const def=definit
 function renderVisible(){for(const kind of Object.keys(definitions)){const host=$('sv-'+kind);if(host&&host.getBoundingClientRect().width)render(kind);}renderServiceStats();}
 function schemaControl(f,value){const id='sv-field-'+f.key;const attrs='id="'+id+'" name="'+f.key+'"';if(f.type==='checkbox')return '<label class="sv-checkbox"><input '+attrs+' type="checkbox" '+(value?'checked':'')+'>'+f.label+'</label>';const inner=f.type==='textarea'?'<textarea '+attrs+' rows="3">'+esc(value||'')+'</textarea>':f.type==='select'?'<select '+attrs+'><option value="">請選擇</option>'+[...(f.options||[]),...((value&&!(f.options||[]).includes(value))?[value]:[])].map(v=>'<option '+(v===value?'selected':'')+'>'+esc(v)+'</option>').join('')+'</select>':'<input '+attrs+' type="'+f.type+'" value="'+esc(value||'')+'" '+(f.type==='date'?'min="1900-01-01" max="2200-12-31"':'')+'>';return '<label class="'+(f.type==='textarea'?'sv-wide':'')+'"><span>'+f.label+'</span>'+inner+'</label>';}
 const dialog=document.createElement('dialog');dialog.id='svEditor';dialog.className='sv-dialog';dialog.innerHTML='<form method="dialog" class="sv-editor"><header><div><small>工作資料</small><h2 id="svEditorTitle"></h2></div><button type="button" data-close aria-label="關閉">✕</button></header><div class="sv-form-grid"></div><p class="sv-form-message" role="status"></p><footer><button type="submit" class="sv-primary">儲存紀錄</button><button type="button" data-close>取消</button></footer></form>';document.body.append(dialog);
-function edit(kind,id){if(!requireEdit('編輯工作資料'))return;if(!state.loaded){alert('資料尚未載入完成，請稍後重試。');return;}const record=id?state.records.find(r=>r.id===id):null;if(id&&!record)return;state.editing={kind,id,revision:record?.revision||0};$('svEditorTitle').textContent=(id?'編輯':'新增')+definitions[kind].title;dialog.querySelector('.sv-form-grid').innerHTML=definitions[kind].fields.map(f=>schemaControl(f,record?.[f.key]??(f.type==='date'&&f.key==='date'?today():''))).join('');dialog.querySelector('.sv-form-message').textContent='輸入客編後可自動補入尚未填寫的客戶欄位。';dialog.showModal();}
+function edit(kind,id){if(!requireEdit('編輯工作資料'))return;if(!state.loaded){alert('資料尚未載入完成，請稍後重試。');return;}const record=id?state.records.find(r=>r.id===id):null;if(id&&!record)return;state.editing={kind,id,revision:record?.revision||0};$('svEditorTitle').textContent=(id?'編輯':'新增')+definitions[kind].title;dialog.querySelector('.sv-form-grid').innerHTML=definitions[kind].fields.map(f=>schemaControl(f,record?.[f.key]??(f.type==='date'&&f.key==='date'?today():''))).join('');dialog.querySelector('.sv-form-message').textContent='輸入客編後可自動補入尚未填寫的客戶欄位。';if(typeof configureMachineInput==='function')configureMachineInput('sv-field-machineCode',record?.customerCode,true);dialog.showModal();}
 dialog.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>dialog.close());
 dialog.addEventListener('change',e=>{if(e.target.name!=='customerCode')return;const c=lookup(e.target.value);if(!c)return;for(const [key,value] of Object.entries({customerName:c.fullName||c.shortName||c.personName,address:c.deliveryAddress,phone:c.mobile})){const el=dialog.querySelector('[name="'+key+'"]');if(el&&!el.value)el.value=value||'';}});
 async function put(record,expectedRevision){if(!accessible()||!collection())throw Error('尚未連線或沒有修改權限，輸入內容已保留。');const ref=collection().doc('svc_'+record.id);return firebaseDb.runTransaction(async tx=>{const snap=await tx.get(ref),old=snap.exists?snap.data().record:null;if(old&&Number(old.revision||0)!==expectedRevision)throw Error('這筆資料已由其他使用者更新，請關閉後重新開啟，避免覆蓋。');const data={...record,revision:(old?.revision||0)+1,updatedAt:new Date().toISOString(),updatedBy:currentUser.email||''};tx.set(ref,{type:'serviceWorkbook',record:data});return data;});}
-dialog.querySelector('form').addEventListener('submit',async e=>{e.preventDefault();const draft=state.editing,def=definitions[draft.kind],old=state.records.find(r=>r.id===draft.id)||{},data={...old,kind:draft.kind,id:draft.id||draft.kind+'_'+crypto.randomUUID(),archived:old.archived||false};for(const f of def.fields){const el=dialog.querySelector('[name="'+f.key+'"]');data[f.key]=f.type==='checkbox'?el.checked:el.value.trim();}data.importKey=old.importKey||'manual:'+data.id;data.sourceSheet=old.sourceSheet||'手動新增';if(draft.kind!=='knowledge'&&!data.customerCode&&!data.customerName){dialog.querySelector('.sv-form-message').textContent='請至少填寫客編或客戶姓名。';return;}if(draft.kind==='knowledge'&&(!data.model||!data.condition)){dialog.querySelector('.sv-form-message').textContent='請填寫適用機型及故障狀況。';return;}if(draft.kind==='removal'&&data.removeDate&&data.returnDate&&data.returnDate<data.removeDate){dialog.querySelector('.sv-form-message').textContent='機回日期不可早於拆機日期。';return;}const buttons=dialog.querySelectorAll('button');buttons.forEach(b=>b.disabled=true);dialog.querySelector('.sv-form-message').textContent='正在儲存…';try{await put(data,draft.revision);dialog.close();showToast('✅ 工作紀錄已儲存');}catch(error){dialog.querySelector('.sv-form-message').textContent=error.message;}finally{buttons.forEach(b=>b.disabled=false);}});
+dialog.querySelector('form').addEventListener('submit',async e=>{e.preventDefault();const draft=state.editing,def=definitions[draft.kind],old=state.records.find(r=>r.id===draft.id)||{},data={...old,kind:draft.kind,id:draft.id||draft.kind+'_'+crypto.randomUUID(),archived:old.archived||false};for(const f of def.fields){const el=dialog.querySelector('[name="'+f.key+'"]');data[f.key]=f.type==='checkbox'?el.checked:el.value.trim();}data.importKey=old.importKey||'manual:'+data.id;data.sourceSheet=old.sourceSheet||'手動新增';if(draft.kind!=='knowledge'&&!data.customerCode&&!data.customerName){dialog.querySelector('.sv-form-message').textContent='請至少填寫客編或客戶姓名。';return;}if(draft.kind==='knowledge'&&(!data.model||!data.condition)){dialog.querySelector('.sv-form-message').textContent='請填寫適用機型及故障狀況。';return;}if(draft.kind==='removal'&&data.removeDate&&data.returnDate&&data.returnDate<data.removeDate){dialog.querySelector('.sv-form-message').textContent='機回日期不可早於拆機日期。';return;}const buttons=dialog.querySelectorAll('button');buttons.forEach(b=>b.disabled=true);dialog.querySelector('.sv-form-message').textContent='正在儲存…';try{await put(data,draft.revision);if(data.machineCode)syncMachineCodeToCustomer(data.customerCode,data.customerName,data.machineCode);dialog.close();showToast('✅ 工作紀錄已儲存');}catch(error){dialog.querySelector('.sv-form-message').textContent=error.message;}finally{buttons.forEach(b=>b.disabled=false);}});
 function repairDraft(r){if(!requireEdit('帶入報修'))return;openRepairTicketDrawer();const values={rtCustomerCode:r.customerCode,rtCustomerName:r.customerName,rtPhone:r.phone||r.callerPhone,rtAddress:r.address,rtCondition:r.condition,rtMachineCode:r.machineCode,rtAppointmentDate:r.secondDate||r.appointmentDate,rtSource:r.kind==='business'?'B':'',rtRemark:[r.remark,r.salesperson?'業務：'+r.salesperson:'',r.dealer?'經銷：'+r.dealer:'',r.contactResult?'聯絡情形：'+r.contactResult:'','工作紀錄：'+r.id].filter(Boolean).join('｜')};for(const [id,value] of Object.entries(values))if($(id))$(id).value=value||'';ensureRtModelOption(r.model||'');$('rtModel').value=r.model||'';$('rtIssue').value='維修';if(r.completed)$('rtStatus').value='⚫ 已完成';else rtSuggestStatus();showToast('已帶入報修表單，請確認後按「儲存報修單」');}
 function mount(kind,parent){const def=definitions[kind],host=document.createElement('div');host.id='sv-'+kind;host.className='sv-workspace';host.innerHTML='<div class="sv-top"><div><h2>'+def.title+'</h2><p>'+esc(def.desc||'保留業務與經銷資訊，集中追蹤第一次及第二次處理')+'</p></div><span class="sv-sync" role="status"></span></div><div class="sv-metrics"></div><div class="sv-toolbar"><button data-add class="sv-primary">＋ 新增紀錄</button><button data-import>匯入「'+def.sheet+'」</button><button data-import-all>匯入整份工作表</button><button data-export>匯出工作資料</button><input type="search" placeholder="搜尋客編、姓名、機型、內容" aria-label="搜尋'+def.title+'" data-filter="search">'+(def.date?'<input type="month" aria-label="篩選月份" data-filter="month"><button data-clear-month>全部月份</button>':'')+(kind==='business'?'<select data-filter="owner" aria-label="篩選業務"><option value="">全部業務</option></select>':'')+'<select data-filter="status" aria-label="篩選處理狀態"><option value="">全部狀態</option>'+(kind==='removal'?['待機回','送廠中','待復機','已結案']:['business','contacts'].includes(kind)?['待處理','已完成']:[]).concat('已封存').map(v=>'<option>'+v+'</option>').join('')+'</select><select data-page-size aria-label="每頁筆數"><option value="50">每頁 50 筆</option><option value="100">每頁 100 筆</option><option value="1000000">顯示全部</option></select><button data-refresh>重新讀取</button><input type="file" accept=".xlsx,.xls,.json" hidden></div><div class="sv-count"></div><div class="sv-results"></div><div class="sv-pager"></div>';parent.append(host);state.filters[kind]={page:0,pageSize:50};host.querySelector('[data-page-size]').onchange=e=>{state.filters[kind].pageSize=Number(e.target.value);state.filters[kind].page=0;render(kind);};host.querySelector('.sv-metrics').onclick=e=>{const button=e.target.closest('[data-metric-filter]');if(!button)return;const f=state.filters[kind];f.status=button.dataset.metricFilter==='all'?'':button.dataset.metricFilter;f.page=0;if(button.dataset.metricFilter==='all'){f.search='';f.month='';f.owner='';for(const el of host.querySelectorAll('[data-filter]'))el.value='';}host.querySelector('[data-filter="status"]').value=f.status;render(kind);};host.querySelector('[data-add]').onclick=()=>edit(kind);for(const input of host.querySelectorAll('[data-filter]'))input.addEventListener(input.type==='search'?'input':'change',()=>{state.filters[kind][input.dataset.filter]=input.value;state.filters[kind].page=0;render(kind);});host.querySelector('[data-clear-month]')?.addEventListener('click',()=>{state.filters[kind].month='';state.filters[kind].page=0;host.querySelector('[data-filter="month"]').value='';render(kind);});const file=host.querySelector('input[type=file]');host.querySelector('[data-import]').onclick=()=>{file.dataset.kind=kind;file.click();};host.querySelector('[data-import-all]').onclick=()=>{file.dataset.kind='all';file.click();};file.onchange=async()=>{if(file.files[0])await importFile(file.files[0],file.dataset.kind);file.value='';};host.querySelector('[data-export]').onclick=exportData;host.querySelector('[data-refresh]').onclick=()=>{state.scope='';connect();};host.querySelector('.sv-results').onclick=async e=>{const b=e.target.closest('button[data-action]'),row=b?.closest('[data-record]');if(!row)return;const r=records(kind).find(x=>x.id===row.dataset.record);if(!r)return;const action=b.dataset.action;if(action==='edit')edit(kind,r.id);if(action==='repair')repairDraft(r);if(action==='openRepair')openRepairTicketDrawer(r.linkedId);if(action==='archive'){if(!requireEdit(r.archived?'還原紀錄':'封存紀錄'))return;b.disabled=true;try{await put({...r,archived:!r.archived},r.revision||0);}catch(error){alert(error.message);}finally{b.disabled=false;}}};render(kind);}
 function download(name,data){const a=document.createElement('a'),url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
@@ -14006,3 +14002,394 @@ init();
 <style>.sv-pager{display:flex;gap:12px;align-items:center;justify-content:flex-end;margin-top:16px;font-size:12px;color:#8196ab}.sv-pager button{background:#edf3f9;color:#4b6c8d;border:1px solid #d8e4ef;padding:7px 12px;font-size:12px}.sv-pager button:disabled{opacity:.4;cursor:default}</style>
 
 <style>.sv-metric-filter{cursor:pointer;transition:border-color .15s,box-shadow .15s}.sv-metric-filter:hover{border-color:#a7bfd9!important;box-shadow:0 3px 10px #365d8612}.sv-metric-filter.selected{border-color:#5e88b3!important;box-shadow:0 0 0 2px #668eb322}.sv-metric-filter:focus-visible{outline:2px solid #628fbb;outline-offset:3px}</style>
+
+<style id="automatic-repair-ui">#opsTaskPage{display:none!important}.rt-entry-field:has([data-rt-fast-key="status"]),#repairTicketDrawer .field:has(#rtStatus),#opsBatchToolbar label:has(#opsListWorkflow){display:none!important}</style>
+<script id="machine-linkage">
+// Shared machine-code registry. Existing nonblank case serials are historical facts and remain intact.
+function normalizeMachineCustomerCode(value){return String(value||'').trim().toUpperCase();}
+function uniqueMachineCodes(values){const seen=new Set(),out=[];for(const value of values){for(const code of parseMachineCodesInput(value)){const key=code.toUpperCase();if(!seen.has(key)){seen.add(key);out.push(code);}}}return out;}
+function customerMachineOptions(code){const key=normalizeMachineCustomerCode(code);if(!key)return [];const c=customers.find(x=>normalizeMachineCustomerCode(x.customerNo)===key);const repairs=(repairTickets||[]).filter(t=>normalizeMachineCustomerCode(t.customerCode)===key);const service=window.ServiceWorkbooks?ServiceWorkbooks.records().filter(t=>normalizeMachineCustomerCode(t.customerCode)===key):[];return uniqueMachineCodes([...(c?.machineCodes||[]),...repairs.map(t=>t.machineCode),...service.map(t=>t.machineCode)]);}
+function configureMachineInput(id,code,preserve=false){const input=document.getElementById(id);if(!input)return;const key=normalizeMachineCustomerCode(code),options=customerMachineOptions(key);if(!preserve&&input.dataset.machineCustomer&&input.dataset.machineCustomer!==key)input.value='';input.dataset.machineCustomer=key;let list=document.getElementById(id+'Options');if(!list){list=document.createElement('datalist');list.id=id+'Options';input.after(list);}list.replaceChildren(...options.map(code=>{const option=document.createElement('option');option.value=code;return option;}));input.setAttribute('list',list.id);if(!input.value&&options.length===1)input.value=options[0];input.placeholder=options.length>1?'選擇此案件機碼或自行輸入':'輸入機碼';}
+const machineBackfillQueue=new Map();let machineBackfillTimer=null;
+function queueMachineBackfill(code){const key=normalizeMachineCustomerCode(code);if(!key||!canEdit())return;machineBackfillQueue.set(key,true);if(machineBackfillTimer)return;machineBackfillTimer=setTimeout(async()=>{machineBackfillTimer=null;const keys=[...machineBackfillQueue.keys()];machineBackfillQueue.clear();for(const key of keys){try{await backfillCustomerMachineCode(key);}catch(error){showToast('⚠️ 機碼已保留，關聯案件同步失敗：'+error.message);}}},500);}
+function syncMachineCodeToCustomer(customerCode,customerName,machineCode){if(!canEdit())return false;const key=normalizeMachineCustomerCode(customerCode),name=String(customerName||'').trim(),codes=uniqueMachineCodes([machineCode]);if(!codes.length)return false;let c=key?customers.find(x=>normalizeMachineCustomerCode(x.customerNo)===key):null;if(!key&&name){const matches=customers.filter(x=>[x.fullName,x.shortName,x.personName].includes(name));if(matches.length===1)c=matches[0];}if(!c)return false;const before=uniqueMachineCodes(c.machineCodes||[]),after=uniqueMachineCodes([...before,...codes]);const changed=JSON.stringify(before)!==JSON.stringify(after);if(changed){c.machineCodes=after;saveCustomers();}queueMachineBackfill(c.customerNo);return changed;}
+async function backfillCustomerMachineCode(code){if(!canEdit()||!firebaseDb)return 0;const key=normalizeMachineCustomerCode(code),options=customerMachineOptions(key);if(options.length!==1)return 0;const machineCode=options[0];const targets=(repairTickets||[]).filter(t=>normalizeMachineCustomerCode(t.customerCode)===key&&!String(t.machineCode||'').trim()&&!t.completeDate&&t.status!=='⚫ 已完成').map(t=>({kind:'repair',id:t.id}));if(window.ServiceWorkbooks)for(const r of ServiceWorkbooks.records()){if(['business','contacts','removal'].includes(r.kind)&&normalizeMachineCustomerCode(r.customerCode)===key&&!String(r.machineCode||'').trim()&&!r.completed&&!r.restoreDate&&!r.archived)targets.push({kind:'service',id:r.id});}let count=0;for(let i=0;i<targets.length;i+=80){const part=targets.slice(i,i+80);count+=await firebaseDb.runTransaction(async tx=>{const refs=part.map(r=>r.kind==='repair'?firebaseDb.collection('repairTickets').doc(r.id):chunksColRef().doc('svc_'+r.id));const snaps=await Promise.all(refs.map(ref=>tx.get(ref)));let updated=0;snaps.forEach((snap,j)=>{if(!snap.exists)return;const data=snap.data(),r=part[j].kind==='repair'?data:data.record;if(!r||normalizeMachineCustomerCode(r.customerCode)!==key||String(r.machineCode||'').trim()||r.completeDate||r.completed||r.restoreDate||r.status==='⚫ 已完成'||r.archived)return;if(part[j].kind==='repair')tx.update(refs[j],{machineCode,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});else tx.update(refs[j],{'record.machineCode':machineCode,'record.revision':(r.revision||0)+1,'record.updatedAt':new Date().toISOString(),'record.updatedBy':currentUser.email||''});updated++;});return updated;});}return count;}
+(function(){
+ const originalUpdate=updateCustomerMachineCodes;window.updateCustomerMachineCodes=function(id,value){const result=originalUpdate.apply(this,arguments),c=customers.find(x=>x.id===id);if(c&&canEdit())queueMachineBackfill(c.customerNo);return result;};
+ const originalAdd=addCustomer;window.addCustomer=function(){const code=document.getElementById('cCustomerNo').value,before=JSON.stringify(customerMachineOptions(code));const result=originalAdd.apply(this,arguments);if(before!==JSON.stringify(customerMachineOptions(code)))queueMachineBackfill(code);return result;};
+ document.addEventListener('change',event=>{if(event.target.matches('#svEditor [name="customerCode"]'))configureMachineInput('sv-field-machineCode',event.target.value);});
+ const oldList=renderJobList;window.renderJobList=function(){const result=oldList.apply(this,arguments),table=document.getElementById('jobListTable');if(!table?.rows.length)return result;const index=[...table.rows[0].cells].findIndex(cell=>cell.textContent.trim()==='狀態');if(index>=0)for(const row of [...table.rows])if(row.cells[index])row.deleteCell(index);return result;};
+ document.getElementById('opsTaskPageTab')?.remove();
+ const oldShow=showPage;window.showPage=function(id){if(id==='opsTaskPage')id='opsOverviewPage';return oldShow.call(this,id);};
+ // Inline pixel font declarations are increased exactly once, including newly rendered forms.
+ const changed=new WeakMap();function enlargeInline(root){const nodes=[];if(root.nodeType===1&&root.hasAttribute('style'))nodes.push(root);if(root.querySelectorAll)nodes.push(...root.querySelectorAll('[style]'));for(const el of nodes){if(el.closest('#scheduleCalendarView'))continue;const value=el.style.fontSize;if(!/^\d+(?:\.\d+)?px$/.test(value)||changed.get(el)===value)continue;const enlarged=(parseFloat(value)+2)+'px';changed.set(el,enlarged);el.style.setProperty('font-size',enlarged,'important');}}
+ enlargeInline(document.body);new MutationObserver(entries=>{for(const e of entries)for(const node of e.addedNodes)if(node.nodeType===1)enlargeInline(node);}).observe(document.body,{childList:true,subtree:true});
+})();
+
+</script>
+
+<style id="system-font-plus-two">
+.header:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:26px!important}
+input:not(#scheduleCalendarView):not(#scheduleCalendarView *),select:not(#scheduleCalendarView):not(#scheduleCalendarView *),textarea:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:16px!important}
+.summary:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:16px!important}
+td:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.date-head:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.engineer-tag:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:12px!important}
+.job:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.job:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.edit:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.delete:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.field label:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.help:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:16px!important}
+.import-status:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:16px!important}
+@media(max-width:900px){.header:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:22px!important}}
+.date-head:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.engineer-head:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.job:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.engineer-code-note:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.job:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.eng-place:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.status-checks label:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.city-checks label:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.multi-select-display:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.multi-select-panel label:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.dispatch-drawer-header h3:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:18px!important}
+.dispatch-drawer-close:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:24px!important}
+.rt-section-title:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.rt-weekday:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.rt-dispatch-item:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14.5px!important}
+.rt-history-item:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14.5px!important}
+.rt-history-empty:not(#scheduleCalendarView):not(#scheduleCalendarView *),.rt-dispatch-empty:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.rt-stat-num:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:22px!important}
+.rt-stat-label:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.rt-status-badge:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.rt-status-select:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.rt-card-title:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:17px!important}
+.rt-card-meta:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.rt-card-grid:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14.5px!important}
+.rt-card-actions button:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.export-range-label:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.travel-link:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.travel-note:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.status-checks label:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.hold-badge:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.dispatch-status-toggle label:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:16px!important}
+.hold-date-hint:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.auth-panel:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.auth-panel button:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+@media(max-width:700px){.auth-status:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}}
+.admin-header h2:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:22px!important}
+.admin-header .admin-badge:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.admin-filter label:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.admin-filter input:not(#scheduleCalendarView):not(#scheduleCalendarView *),.admin-filter select:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.admin-stat-card .stat-num:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:30px!important}
+.admin-stat-card .stat-label:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.log-table-wrap th:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.log-table-wrap td:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.log-action-badge:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.log-detail:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.admin-no-data:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:17px!important}
+.admin-lock .lock-icon:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:62px!important}
+.admin-lock .lock-msg:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:18px!important}
+.admin-lock .lock-sub:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.log-user-cell:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+#statsHistoryResult.empty:not(#scheduleCalendarView):not(#scheduleCalendarView *),#adminHistoryResult.empty:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14.5px!important}
+.admin-widget h3:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:17px!important}
+.admin-kpi b:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:26px!important}
+.admin-kpi span:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.mini-table:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.role-panel h3:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:18px!important}
+.role-list:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.role-badge:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.route-info:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.travel-tag:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.overlap-badge:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:12px!important}
+#myTodayPanel h3:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:18px!important}
+.my-today-sub:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.my-today-job:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.my-today-empty:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.login-card .gate-icon:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:44px!important}
+.login-card h2:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:24px!important}
+.login-card p:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:16px!important}
+.login-card button:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:17px!important}
+.no-access-card .gate-icon:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:44px!important}
+.no-access-card h2:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:24px!important}
+.no-access-card p:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:16px!important}
+.no-access-card button:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:17px!important}
+@media(max-width:900px){#myTodayPanel h3:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:22px!important}
+.my-today-sub:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.my-today-job:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:17px!important}
+.my-today-job .time:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:18px!important}
+.my-today-job .name:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:19px!important}
+.my-today-job .route-info:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:16px!important}
+.my-today-empty:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:17px!important}}
+.my-day-section h4:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:18px!important}
+@media(max-width:900px){.my-day-section h4:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:19px!important}}
+.completion-bar-label:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.completion-bar-val:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.leave-item:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.leave-badge:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+#customerHistoryResult .hist-card:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+#customerHistoryResult .hist-card .hist-top:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:16px!important}
+#customerHistoryResult .hist-card .hist-date:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.repair-title:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:19px!important}
+.repair-meta:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.repair-grid:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.repair-actions button:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.repair-title:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:19px!important}
+.repair-video-icon:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:22px!important}
+.repair-video-hint:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.schedule-subtab-btn:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:16px!important}
+.outsource-toolbar .os-hint:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.outsource-table:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.outsource-table input:not(#scheduleCalendarView):not(#scheduleCalendarView *),.outsource-table select:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.os-badge:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.os-checked:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:20px!important}
+.os-unchecked:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:20px!important}
+.os-row-actions button:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.os-view-count:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.os-completed-note:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.outsource-table tr.os-inline-edit input:not(#scheduleCalendarView):not(#scheduleCalendarView *),.outsource-table tr.os-inline-edit select:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+
+.reminder-btn:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+#reminderModal textarea:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:17px!important}
+#reminderModal .close-x:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:20px!important}
+.admin-map-card:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+@media(max-width:900px){#reminderModal textarea:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:16px!important}}
+.route-final-btn:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.route-final-meta:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+@media(max-width:900px){.route-final-btn:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}}
+
+body.compact-schedule #schedule .date-head:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.compact-schedule #schedule .weekend-head:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.compact-schedule #schedule .today-head:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.compact-schedule table#schedule .date-head:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.compact-schedule table#schedule .weekend-head:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.compact-schedule table#schedule .today-head:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+body.compact-schedule #schedule .engineer-head:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.compact-schedule #schedule td.slot:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.compact-schedule table#schedule .engineer-head:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.compact-schedule table#schedule td.slot:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:12px!important}
+body.compact-schedule #schedule .engineer-head:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.compact-schedule table#schedule .engineer-head:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:12px!important}
+body.compact-schedule #schedule .time-col:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.compact-schedule #schedule th.time-col:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.compact-schedule #schedule td.time-col:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.compact-schedule table#schedule .time-col:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:11px!important}
+body.schedule-month-view.compact-schedule #schedule .date-head:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.schedule-month-view.compact-schedule #schedule .weekend-head:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.schedule-month-view.compact-schedule #schedule .today-head:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.schedule-month-view.compact-schedule table#schedule .date-head:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.schedule-month-view.compact-schedule table#schedule .weekend-head:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.schedule-month-view.compact-schedule table#schedule .today-head:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:12px!important}
+body.schedule-month-view.compact-schedule #schedule .engineer-head:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.schedule-month-view.compact-schedule #schedule td.slot:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.schedule-month-view.compact-schedule table#schedule .engineer-head:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.schedule-month-view.compact-schedule table#schedule td.slot:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:11px!important}
+body.schedule-month-view.compact-schedule #schedule .time-col:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.schedule-month-view.compact-schedule table#schedule .time-col:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:10px!important}
+body.schedule-month-view.compact-schedule .job:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:11px!important}
+body.compact-schedule .job:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:12px!important}
+body.compact-schedule .job .card-main:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:12px!important}
+body.compact-schedule .job .card-main .compact-city:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+body.compact-schedule .job .card-main .compact-district:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+body.compact-schedule .job .card-main .compact-code:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:12px!important}
+body.compact-schedule .job.expanded:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+body.compact-schedule .job.expanded .card-main:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:16px!important}
+body.compact-schedule .job.expanded .card-time:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+body.compact-schedule .job.expanded .card-line:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+body.compact-schedule .job.expanded .status-checks:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+#cartridgeModal .chead:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:17px!important}
+#cartridgeModal .cfield label:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+#cartridgeModal .cfield select:not(#scheduleCalendarView):not(#scheduleCalendarView *),#cartridgeModal .cfield input:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:16px!important}
+#cartridgeModal .cfoot button:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:16px!important}
+.cart-arranged-badge:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.cart-jump-btn:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.cart-arrange-btn:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+#contactLogModal .chead:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:17px!important}
+#contactLogModal .cfield label:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+#contactLogModal .cfield select:not(#scheduleCalendarView):not(#scheduleCalendarView *),#contactLogModal .cfield input:not(#scheduleCalendarView):not(#scheduleCalendarView *),#contactLogModal .cfield textarea:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:16px!important}
+#contactLogModal .cfoot button:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:16px!important}
+.contact-log-item:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.contact-log-item .log-del:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.contact-log-item .log-method:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.contact-log-item .log-postpone:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+#batchContactModal .chead:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:17px!important}
+#batchContactModal .cfield label:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+#batchContactModal .cfield select:not(#scheduleCalendarView):not(#scheduleCalendarView *),#batchContactModal .cfield input:not(#scheduleCalendarView):not(#scheduleCalendarView *),#batchContactModal .cfield textarea:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:16px!important}
+#batchContactModal .cfoot button:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:16px!important}
+.header:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:19px!important}
+.header .auth-panel:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.tabs button:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+#scheduleCalendarView > .toolbar input:not(#scheduleCalendarView):not(#scheduleCalendarView *),#scheduleCalendarView > .toolbar button:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14.5px!important}
+#scheduleCalendarView > .summary:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14.5px!important}
+#schedulePage .engineer-code-note:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+#schedulePage .work-color-legend:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+#schedule .engineer-head:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:19px!important}
+body.compact-schedule #schedule .engineer-head:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:16px!important}
+body.schedule-month-view.compact-schedule #schedule .engineer-head:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+#schedule .engineer-head .eng-place:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:17px!important}
+#schedule .date-head:not(#scheduleCalendarView):not(#scheduleCalendarView *),#schedule .weekend-head:not(#scheduleCalendarView):not(#scheduleCalendarView *),#schedule .today-head:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:19px!important}
+body.compact-schedule #schedule .date-head:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.compact-schedule #schedule .weekend-head:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.compact-schedule #schedule .today-head:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:17px!important}
+body.schedule-month-view.compact-schedule #schedule .date-head:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.schedule-month-view.compact-schedule #schedule .weekend-head:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.schedule-month-view.compact-schedule #schedule .today-head:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:16px!important}
+
+
+.other-dispatch-fields label:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.other-date-group h4:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:16px!important}
+.other-job-card:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+#otherDispatchCalendar:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+#otherDispatchCalendar .other-date-head:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:17px!important}
+#otherDispatchCalendar .other-date-head span:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+#otherDispatchCalendar .other-engineer:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:17px!important}
+#otherDispatchCalendar .other-calendar-job:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+#otherDispatchCalendar .other-card-actions button:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+#otherDispatchCalendar.other-compact .other-calendar-job:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+#otherDispatchCalendar.other-compact .other-card-actions button:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:12px!important}
+
+#otherDispatchCalendar .other-card-region:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+#outsourceTable .os-quick-field:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.install-list-table:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+#installFollowupList textarea:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+body.ops-shell:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+body.ops-shell>.header:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.ops-shell .ops-workspace-name:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.ops-shell .header .auth-status:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.ops-shell .header .auth-panel button:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.ops-shell .ops-brand-copy strong:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:17px!important}
+.ops-shell .ops-brand-copy small:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:12px!important}
+.ops-shell .ops-nav-group:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:12px!important}
+body.ops-shell>.tabs button:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14.5px!important}
+.ops-shell .ops-nav-footer:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:12px!important}
+.ops-shell .ops-breadcrumb:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.ops-shell .ops-context h1:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:25px!important}
+.ops-shell .ops-context p:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.ops-shell .ops-today:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+body.ops-shell .schedule-subtab-btn:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+body.ops-shell .toolbar button:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.ops-shell .outsource-toolbar button:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.ops-shell .search-box button:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+body.ops-shell input:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.ops-shell select:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.ops-shell textarea:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+body.ops-shell .summary:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.ops-shell #scheduleCalendarView>.summary:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+body.ops-shell .badge:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+body.ops-shell .admin-widget h3:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.ops-shell .role-panel h3:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:16px!important}
+body.ops-shell .page>h2:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.ops-shell .page>h3:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:19px!important}
+body.ops-shell .page table:not(#schedule):not(#otherDispatchCalendar)>thead>tr>th:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.ops-shell .mini-table thead th:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.ops-shell .install-list-table th:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+body.ops-shell .mini-table td:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.ops-shell .install-list-table td:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+body.ops-shell .os-badge:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+body.ops-shell .dispatch-drawer-body .field label:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+body.ops-shell .help:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.ops-shell .import-status:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.ops-metric-top:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.ops-metric-number:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:34px!important}
+.ops-metric-foot:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.ops-panel-heading h2:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:16px!important}
+.ops-panel-heading button:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.ops-overview-time:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.ops-overview-customer strong:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.ops-overview-customer span:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.ops-overview-engineer:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.ops-quicklink:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.ops-dashboard-note:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+@media(max-width:850px){.ops-shell .ops-context h1:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:22px!important}
+.ops-shell .header .auth-status:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:12px!important}}
+@media(max-width:520px){.ops-metric-number:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:28px!important}
+.ops-shell .ops-context p:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}}
+body.ops-shell #schedule .date-head:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.ops-shell #schedule .weekend-head:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.ops-shell #schedule .today-head:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:19px!important}
+body.ops-shell.compact-schedule #schedule .date-head:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.ops-shell.compact-schedule #schedule .weekend-head:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.ops-shell.compact-schedule #schedule .today-head:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:17px!important}
+body.ops-shell.schedule-month-view.compact-schedule #schedule .date-head:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.ops-shell.schedule-month-view.compact-schedule #schedule .weekend-head:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.ops-shell.schedule-month-view.compact-schedule #schedule .today-head:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:17px!important}
+.followup-summary-cards span:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.followup-summary-cards strong:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:26px!important}
+.followup-summary-cards small:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.followup-status-tabs button:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.followup-status-tabs>span:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+body.ops-shell #lpList .leave-badge:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+body.ops-shell #lpList .leave-item button:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+body.ops-shell #tripStatsTable th:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+body.ops-shell #tripStatsTable td:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+@media(max-width:520px){.followup-summary-cards strong:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:23px!important}}
+.leave-workspace-toolbar button:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.leave-workspace-summary span:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.leave-workspace-summary strong:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:26px!important}
+.leave-workspace-summary small:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.leave-weekday:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.leave-day-button:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.leave-cell-plus:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.leave-event:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.leave-event strong:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.leave-event small:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:12px!important}
+.leave-month-footer:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.leave-date-heading:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.leave-date-heading small:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+body.ops-shell #lpList .leave-item .leave-list-person:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+body.ops-shell #lpList .leave-item .leave-list-time:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.leave-editor-heading small:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.leave-editor-heading h2:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:21px!important}
+.leave-editor-heading button:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:21px!important}
+.leave-repeat-controls summary:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.leave-repeat-range label:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.leave-repeat-weekdays:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.leave-repeat-controls button:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.leave-repeat-controls>small:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.leave-editor-tip:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.leave-conflict-box:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+@media(max-width:1050px){.leave-event:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:12px!important}
+.leave-event strong:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:12px!important}}
+.ops-shell .ops-global-search-trigger:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.ops-global-search-trigger>span:first-child:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:22px!important}
+.ops-global-search-trigger kbd:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:11px!important}
+.ops-shell .ops-reset-filters:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.ops-search-heading:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.ops-search-input-wrap>span:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:28px!important}
+body.ops-shell #opsSearchInput:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:16px!important}
+.ops-search-count:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.ops-search-result:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.ops-search-type:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:12px!important}
+.ops-search-result-copy strong:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.ops-search-result-copy small:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.ops-search-empty:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.ops-search-empty small:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.ops-search-foot:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:12px!important}
+.ops-save-feedback:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:12px!important}
+body.ops-shell .header .auth-panel #opsSaveRetry:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:12px!important}
+@media(max-width:520px){.ops-search-type:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:11px!important}
+.ops-save-feedback:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:11px!important}}
+.ops-case-head h2:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:21px!important}
+.ops-case-table:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.ops-case-card strong:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:29px!important}
+.ops-case-badge:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.ops-case-nav-count:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+
+body.ops-shell #rtFastAddBody input:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.ops-shell #rtFastAddBody select:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.ops-shell #rtFastAddBody textarea:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+body.ops-shell .rt-fast-subfield:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:12px!important}
+body.ops-shell #rtFastAddBody button:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+body.ops-shell .rt-fast-details-grid label:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+body.ops-shell .rt-fast-hint-row td:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+
+body.ops-shell .rt-entry-header h2:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:17px!important}
+body.ops-shell .rt-entry-header p:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+body.ops-shell .rt-entry-header button:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+body.ops-shell .rt-entry-field:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+body.ops-shell #rtRepairEntryCard #rtFastAddBody input:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.ops-shell #rtRepairEntryCard #rtFastAddBody select:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.ops-shell #rtRepairEntryCard #rtFastAddBody textarea:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+body.ops-shell .rt-entry-status:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+@media(max-width:900px){body.ops-shell .rt-entry-header h2:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:16px!important}}
+@media(max-width:450px){body.ops-shell #rtRepairEntryCard #rtFastAddBody input:not(#scheduleCalendarView):not(#scheduleCalendarView *),body.ops-shell #rtRepairEntryCard #rtFastAddBody select:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+body.ops-shell .rt-entry-header p:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}}
+
+body.ops-shell #rtTable thead th:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+body.ops-shell #rtFastRecordsBody td:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+body.ops-shell #rtFastRecordsBody .rt-status-select:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.rt-customer-code:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.rt-record-actions button:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+body.ops-shell .rt-inline-date-label:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+body.ops-shell .rt-inline-date:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+body.ops-shell #rtSourceLegend:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.rt-source-hint:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.sv-subtabs button:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.sv-top h2:not(#scheduleCalendarView):not(#scheduleCalendarView *),.sv-workspace>h2:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:18px!important}
+.sv-top p:not(#scheduleCalendarView):not(#scheduleCalendarView *),.sv-workspace>p:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.sv-sync:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.sv-metrics span:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.sv-metrics strong:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:27px!important}
+.sv-toolbar button:not(#scheduleCalendarView):not(#scheduleCalendarView *),.sv-actions button:not(#scheduleCalendarView):not(#scheduleCalendarView *),.sv-dialog button:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.sv-toolbar input:not(#scheduleCalendarView):not(#scheduleCalendarView *),.sv-toolbar select:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.sv-count:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.sv-record-heading:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.sv-record:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.sv-code:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.sv-line span:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.sv-actions button:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.sv-badge:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.sv-muted:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.sv-empty strong:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:16px!important}
+.sv-empty p:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.sv-editor header h2:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:20px!important}
+.sv-editor header small:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:13px!important}
+.sv-form-grid label:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.sv-form-grid input:not(#scheduleCalendarView):not(#scheduleCalendarView *),.sv-form-grid select:not(#scheduleCalendarView):not(#scheduleCalendarView *),.sv-form-grid textarea:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.sv-form-message:not(#scheduleCalendarView):not(#scheduleCalendarView *),.sv-import-progress:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.sv-import-copy:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:15px!important}
+.sv-import-counts div:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.sv-nav-icon:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:19px!important}
+
+.sv-pager:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+.sv-pager button:not(#scheduleCalendarView):not(#scheduleCalendarView *){font-size:14px!important}
+
+
+body.ops-shell #scheduleCalendarView{font-size:13px!important}
+</style>
