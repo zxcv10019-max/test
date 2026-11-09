@@ -1863,7 +1863,7 @@ body.force-admin-scroll #statsPage .log-table-wrap th{
   <button id="tabCustomer" onclick="showPage('customerPage')">客戶資料</button>
   <button id="tabList" onclick="showPage('listPage')">派工明細</button>
   <button id="tabRepair" onclick="showPage('repairPage')">🛠️ 報修案件 <span id="repairPendingCount" style="background:#d63031;color:#fff;border-radius:999px;padding:1px 6px;font-size:11px;display:none">0</span></button>
-  <button id="tabRepairManage" onclick="showPage('repairManagePage')">📋 報修管理 <span id="repairTicketPendingCount" style="background:#d63031;color:#fff;border-radius:999px;padding:1px 6px;font-size:11px;display:none">0</span></button>
+  <button id="tabRepairManage" onclick="showPage('repairManagePage')">📋 報修管理</button>
   <button id="tabLeave" onclick="showPage('leavePage')">🏖️ 休假管理</button>
   <button id="tabCartridge" onclick="showPage('cartridgePage')">🔄 換芯名單</button>
   <button id="tabStats" onclick="showPage('statsPage')" style="display:none">📊 派工統計</button>
@@ -11068,13 +11068,7 @@ function loadRepairTickets(){
     });
 }
 
-function updateRepairTicketPendingBadge(){
-  const count = repairTickets.filter(t => (t.status || "🔵 已派工") === "🔵 已派工").length;
-  const el = document.getElementById("repairTicketPendingCount");
-  if(!el) return;
-  el.textContent = count;
-  el.style.display = count ? "inline-block" : "none";
-}
+function updateRepairTicketPendingBadge(){}
 
 // ===== 狀態自動判斷 =====
 function rtComputeStatus(f){
@@ -14030,7 +14024,7 @@ function init(){const page=$('repairManagePage'),general=document.createElement(
  const repairGroup=document.createElement('div');repairGroup.className='ops-nav-group';repairGroup.id='svRepairNavGroup';repairGroup.textContent='報修管理';repairGroup.dataset.forButton='tabRepairManage';
  const customerGroup=sidenav.querySelector('.ops-nav-group[data-for-button="tabCustomer"]');sidenav.insertBefore(repairGroup,customerGroup);
  const businessNav=document.createElement('button');businessNav.id='svNav-business';businessNav.type='button';businessNav.className='sv-nav';businessNav.innerHTML=($('tabRepairManage').querySelector('svg')?.outerHTML||'<span class="sv-nav-icon">▤</span>')+'<span class="ops-nav-label">業務報修</span>';businessNav.title='業務報修';businessNav.onclick=()=>navigate('business');
- const generalLabel=$('tabRepairManage').querySelector('.ops-nav-label'),pendingCount=generalLabel.querySelector('#repairTicketPendingCount');generalLabel.replaceChildren(document.createTextNode('一般報修'));if(pendingCount)generalLabel.append(pendingCount);$('tabRepairManage').title='一般報修';
+ const generalLabel=$('tabRepairManage').querySelector('.ops-nav-label');generalLabel.replaceChildren(document.createTextNode('一般報修'));$('tabRepairManage').title='一般報修';
  for(const item of [$('tabRepairManage'),businessNav,$('tabRepair'),...['removal','history','contacts'].map(k=>$('svNav-'+k))])sidenav.insertBefore(item,customerGroup);
  const oldShow=window.showPage;window.showPage=function(id){const result=oldShow.apply(this,arguments),entry=Object.entries(definitions).find(([,d])=>d.page===id);document.querySelectorAll('.sv-nav').forEach(b=>b.classList.toggle('active',!!entry&&b.id==='svNav-'+entry[0]));if(entry){const [kind,def]=entry;$('opsPageTitle').textContent=def.title;$('opsPageDescription').textContent=def.desc;$('opsBreadcrumb').textContent='工作空間 / 報修管理';render(kind);}if(id==='repairManagePage'){selectRepairTab('general');render('business');}if(id==='statsPage')renderServiceStats();return result;};
  // Add page metadata to the existing shell so its asynchronous observer retains new titles.
