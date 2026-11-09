@@ -2134,6 +2134,7 @@ body.force-admin-scroll #statsPage .log-table-wrap th{
         <select id="rtHandlingMethod" onchange="rtSuggestStatus()">
           <option value="">— 請選擇 —</option>
           <option>現場維修</option>
+          <option>換機</option>
           <option>拆機</option>
           <option>其他</option>
         </select>
@@ -3330,6 +3331,7 @@ function startCloudSync(){
           // 等 applyRemoteData 把聯絡紀錄同步到本機後，再讓使用者決定是否上傳換芯資料
         }
         await applyRemoteData(data);
+        window.rtInspectionJobsReady=true;
         setSyncStatus(`已同步共用派工表：${currentUser.email}（${roleLabel()}）`, "ok");
       }else{
         if(localDataExists() && canEdit()){
@@ -11049,6 +11051,7 @@ function loadRepairTickets(){
     .orderBy("createdAt","desc")
     .onSnapshot(snapshot => {
       repairTickets = snapshot.docs.map(doc => ({id:doc.id, ...doc.data()}));
+      window.rtInspectionTicketsReady=true;
       renderRepairTicketStats();
       renderRepairTicketList();
       updateRepairTicketPendingBadge();
@@ -11359,6 +11362,8 @@ async function saveRepairTicket(){
 
   try{
     if(editingRepairTicketId){
+      const previous=repairTickets.find(t=>t.id===editingRepairTicketId);
+      if(data.appointmentDate!==(previous?.appointmentDate||"")){data.appointmentDateOrigin=data.appointmentDate?"manual":"";data.appointmentDispatchId="";}
       await firebaseDb.collection("repairTickets").doc(editingRepairTicketId).update(data);
       showToast("✅ 已更新報修單");
     }else{
@@ -11784,7 +11789,7 @@ function rtSourceHtml(t){
   return code?`<span class="rt-source rt-source-${code}">【${code}】${{A:'直客',B:'業務拋轉',C:'非產值件'}[code]}</span>`:'<span class="rt-muted">未填</span>';
 }
 function rtDateInputHtml(t,key,label){
-  return `<label class="rt-inline-date-label" onclick="event.stopPropagation()"><span>${label}</span><input type="date" class="rt-inline-date" aria-label="${repairEsc([t.customerCode,label].join(' '))}" value="${repairEsc(t[key]||'')}" ${canEdit()?'':'disabled'} onblur="updateRepairTicketDateInline(${jsStr(t.id)},'${key}',this)"></label>`;
+  return `<label class="rt-inline-date-label" onclick="event.stopPropagation()"><span>${label}${key==='appointmentDate'&&t.appointmentDateOrigin==='inspection-dispatch'?' · 派工帶入':''}</span><input type="date" class="rt-inline-date" aria-label="${repairEsc([t.customerCode,label].join(' '))}" value="${repairEsc(t[key]||'')}" ${canEdit()?'':'disabled'} onblur="updateRepairTicketDateInline(${jsStr(t.id)},'${key}',this)"></label>`;
 }
 async function updateRepairTicketDateInline(ticketId,key,input){
   if(!['appointmentDate','returnDate','completeDate'].includes(key))return;
@@ -11796,8 +11801,9 @@ async function updateRepairTicketDateInline(ticketId,key,input){
   input.dataset.saving='1';input.disabled=true;
   const status=rtComputeStatus({...ticket,[key]:value});
   try{
-    await firebaseDb.collection('repairTickets').doc(ticketId).update({[key]:value,status,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
-    Object.assign(ticket,{[key]:value,status});
+    const patch={[key]:value,status,...(key==='appointmentDate'?{appointmentDateOrigin:value?'manual':'',appointmentDispatchId:''}:{})};
+    await firebaseDb.collection('repairTickets').doc(ticketId).update({...patch,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+    Object.assign(ticket,patch);
     renderRepairTicketStats();renderRepairTicketList();updateRepairTicketPendingBadge();
     showToast('✅ 日期已儲存，狀態已同步更新');
   }catch(error){input.value=previous;alert('日期儲存失敗：'+error.message);}
@@ -11824,7 +11830,7 @@ function rtSelectInlineHtml(t,key,label,options){
   const value=rtInlineValue(t,key),choices=[...options];if(!choices.some(([v])=>v===value))choices.push([value,value]);
   return `<label class="rt-inline-field"><span>${label}：</span><select class="rt-inline-edit" aria-label="${repairEsc(t.customerCode+' '+label)}" ${canEdit()?'':'disabled'} onchange="updateRepairTicketFieldInline(${jsStr(t.id)},'${key}',this)">${choices.map(([v,l])=>`<option value="${repairEsc(v)}" ${v===value?'selected':''}>${repairEsc(l)}</option>`).join('')}</select></label>`;
 }
-function rtHandlingInlineHtml(t){return '<div class="rt-handling-inline">'+rtSelectInlineHtml(t,'warranty','保固',[['','—'],['保內','保內'],['保外','保外']])+rtSelectInlineHtml(t,'handlingMethod','處理',[['','—'],['現場維修','現場維修'],['拆機','拆機'],['其他','其他']])+rtTextInlineHtml(t,'removeNote','拆機')+rtSelectInlineHtml(t,'loaner','備機',[['','無'],['yes','需要'],['new','備新機']])+'</div>';}
+function rtHandlingInlineHtml(t){return '<div class="rt-handling-inline">'+rtSelectInlineHtml(t,'warranty','保固',[['','—'],['保內','保內'],['保外','保外']])+rtSelectInlineHtml(t,'handlingMethod','處理',[['','—'],['現場維修','現場維修'],['換機','換機'],['拆機','拆機'],['其他','其他']])+rtSelectInlineHtml(t,'removeNote','拆機',[['','—'],['主機','主機'],['龍頭','龍頭'],['主+龍','主+龍']])+rtSelectInlineHtml(t,'loaner','備機',[['','無'],['yes','需要'],['new','備新機']])+'</div>';}
 async function updateRepairTicketFieldInline(id,key,input){
   if(!['warranty','handlingMethod','removeNote','loaner','remark'].includes(key))return;
   const ticket=repairTickets.find(t=>t.id===id);if(!ticket)return;
@@ -11852,12 +11858,12 @@ async function updateRepairTicketFieldInline(id,key,input){
 
 function renderRepairTicketTable(list){
   const table=document.getElementById('rtTable');if(!table)return;
-  const headers=['狀態／報修日','客戶資料','報修內容','處理資訊','來源','日期追蹤','備註／操作'];
+  const headers=['報修日期','客戶資料','報修內容','處理資訊','來源','日期追蹤','備註／操作'];
   let html='<tr>'+headers.map(h=>'<th>'+h+'</th>').join('')+'</tr>';
   for(const t of list){
     const d=rtRepairDisplay(t),status=t.status||'🔵 已派工';
     html+=`<tr>
-      <td>${rtStatusSelectHtml(t)}<div class="rt-cell-sub rt-nowrap">${repairEsc(t.reportDate||'-')}</div></td>
+      <td><div class="rt-cell-sub rt-nowrap">${repairEsc(t.reportDate||'-')}</div></td>
       <td><strong class="rt-customer-code">${repairEsc(t.customerCode||'-')}</strong><div>${repairEsc(t.customerName||'-')}</div><div class="rt-cell-sub">${t.address?`<a href="${mapUrl(t.address)}" target="_blank" rel="noopener">${repairEsc(t.address)}</a>`:'-'}</div><div class="rt-cell-sub">機型：${repairEsc(t.model||'-')}</div><div class="rt-cell-sub">機碼：${repairEsc(t.machineCode||'-')}</div></td>
       <td><span class="rt-item-chip">${repairEsc(d.item)}</span><div class="rt-cell-sub">${repairEsc(d.condition)}</div></td>
       <td>${rtHandlingInlineHtml(t)}</td>
@@ -11871,8 +11877,8 @@ function renderRepairTicketTable(list){
 }
 function renderRepairTicketCards(list){
   const box=document.getElementById('rtCards');if(!box)return;
-  box.innerHTML=list.length?list.map(t=>{const d=rtRepairDisplay(t);return `<article class="rt-card" style="border-left-color:${RT_STATUS_COLORS[t.status]||'#777'}">
-    <div class="rt-card-top"><div><strong class="rt-card-title">${repairEsc([t.customerCode,t.customerName].filter(Boolean).join(' ')||'未填客戶')}</strong><div class="rt-card-meta">報修：${repairEsc(t.reportDate||'-')}</div></div>${rtStatusSelectHtml(t)}</div>
+  box.innerHTML=list.length?list.map(t=>{const d=rtRepairDisplay(t);return `<article class="rt-card">
+    <div class="rt-card-top"><div><strong class="rt-card-title">${repairEsc([t.customerCode,t.customerName].filter(Boolean).join(' ')||'未填客戶')}</strong><div class="rt-card-meta">報修：${repairEsc(t.reportDate||'-')}</div></div></div>
     <div class="rt-card-grid"><div><b>機型：</b>${repairEsc(t.model||'-')}</div><div><b>機碼：</b>${repairEsc(t.machineCode||'-')}</div><div><b>項目：</b>${repairEsc(d.item)}</div><div><b>機況：</b>${repairEsc(d.condition)}</div><div class="rt-card-wide">${rtHandlingInlineHtml(t)}</div><div class="rt-card-wide"><b>地址：</b>${t.address?`<a href="${mapUrl(t.address)}" target="_blank" rel="noopener">${repairEsc(t.address)}</a>`:'-'}</div><div class="rt-card-wide"><b>來源：</b>${rtSourceHtml(t)}</div></div>
     <div class="rt-card-dates">${rtDateInputHtml(t,'appointmentDate','預約日期')}${rtDateInputHtml(t,'returnDate','機回日期')}${rtDateInputHtml(t,'completeDate','完成日期')}</div>
     ${rtTextInlineHtml(t,'remark','備註',true)}<div class="rt-record-actions"><button onclick="openRepairTicketDrawer(${jsStr(t.id)})">✏️ 編輯</button>${t.status==='🟢 待復機'?`<button onclick="repairTicketCreateDispatch(${jsStr(t.id)})">📅 建立派工</button>`:''}</div></article>`;}).join(''):'<div class="help">目前沒有符合條件的報修案件。</div>';
@@ -12543,6 +12549,55 @@ body.ops-shell .rt-inline-field{display:flex;align-items:start;gap:4px;margin:0 
 body.ops-shell .rt-inline-field>span{flex:none;line-height:30px}body.ops-shell .rt-inline-edit{box-sizing:border-box;display:block;min-width:0!important;width:100%;max-width:100%;padding:5px!important;border:1px solid #d5e0ec;border-radius:5px;color:#294762;background:#fff;font:inherit;line-height:1.5}
 body.ops-shell textarea.rt-inline-edit{resize:vertical;min-height:100px}body.ops-shell .rt-inline-field:has(textarea){display:block}body.ops-shell .rt-inline-edit:focus{outline:2px solid #a9c8eb;outline-offset:1px}.rt-inline-edit:disabled{background:#f4f7fa}
 </style>
+
+<style id="repair-slim-entry">#rtRepairEntryCard #rtFastAddBody>[hidden]{display:none!important}</style>
+
+<script id="repair-inspection-appointments">
+(function(){
+'use strict';
+const code=v=>String(v||'').trim().toUpperCase();
+function validDate(value){if(!/^\d{4}-\d{2}-\d{2}$/.test(String(value||'')))return false;const d=new Date(value+'T00:00:00Z');return Number.isFinite(d.getTime())&&d.toISOString().slice(0,10)===value;}
+function inspectionJob(j){return !!j&&!!j.id&&validDate(j.date)&&!j.cancelled&&!j.canceled&&!j.deleted&&!j.archived&&!isHoldJob(j)&&isValidJob(j)&&! /取消|作廢|已刪除/.test([j.workflowStatus,j.status].join(' '))&&/巡檢設備/.test(Array.isArray(j.workItem)?j.workItem.join('、'):String(j.workItem||''));}
+function buildIndex(list){const index=new Map();for(const job of list||[]){if(!inspectionJob(job)||!code(job.customerCode))continue;const key=code(job.customerCode);if(!index.has(key))index.set(key,[]);index.get(key).push(job);}for(const values of index.values())values.sort((a,b)=>a.date.localeCompare(b.date)||String(a.startTime||a.time||'').localeCompare(String(b.startTime||b.time||''))||String(a.id).localeCompare(String(b.id)));return index;}
+function candidate(ticket,index){if(!ticket||!validDate(ticket.reportDate)||!code(ticket.customerCode)||ticket.completeDate||ticket.status==='⚫ 已完成')return null;const min=ticket.reportDate;return (index.get(code(ticket.customerCode))||[]).find(j=>j.date>=min)||null;}
+function patchFor(ticket,index){
+ if(!ticket||ticket.completeDate||ticket.status==='⚫ 已完成')return null;
+ const owned=ticket.appointmentDateOrigin==='inspection-dispatch';
+ if(ticket.appointmentDate&&!owned)return null;
+ if(ticket.appointmentDateOrigin==='manual')return null;
+ if(!validDate(ticket.reportDate)||!code(ticket.customerCode))return null;
+ const match=candidate(ticket,index);if(!match&&!owned)return null;
+ const date=match?.date||'',id=String(match?.id||'');
+ if((ticket.appointmentDate||'')===date&&(ticket.appointmentDispatchId||'')===id)return null;
+ const patch={appointmentDate:date,appointmentDispatchId:id,appointmentDateOrigin:match?'inspection-dispatch':''};
+ patch.status=rtComputeStatus({...ticket,...patch});return patch;
+}
+window.RepairInspectionAppointments={buildIndex,candidate,patchFor};
+let running=false,lastSignature='',retryAfter=0;
+async function sync(){
+ if(running||Date.now()<retryAfter||!window.rtInspectionJobsReady||!window.rtInspectionTicketsReady||!currentUser||!firebaseDb||!canEdit()||isApplyingRemote||localDirty)return;
+ const index=buildIndex(jobs),scope=currentUser.uid||currentUser.email;
+ const signature=JSON.stringify([scope,[...index].map(([k,v])=>[k,v.map(j=>[String(j.id),j.date])]),repairTickets.map(t=>[t.id,t.customerCode,t.reportDate,t.appointmentDate,t.appointmentDateOrigin,t.appointmentDispatchId,t.completeDate,t.returnDate,t.status])]);
+ if(signature===lastSignature)return;
+ const pending=repairTickets.filter(t=>patchFor(t,index));running=true;let failed=false;
+ try{
+  for(let i=0;i<pending.length;i+=5){if(!currentUser||(currentUser.uid||currentUser.email)!==scope||!canEdit()||localDirty)break;
+   const results=await Promise.allSettled(pending.slice(i,i+5).map(async t=>{
+    await firebaseDb.runTransaction(async tx=>{
+     if(!currentUser||(currentUser.uid||currentUser.email)!==scope||!canEdit()||localDirty)return;
+     const ref=firebaseDb.collection('repairTickets').doc(t.id),snap=await tx.get(ref);if(!snap.exists)return;
+     // Re-evaluate the latest cloud fields to preserve manual edits made during synchronization.
+     const patch=patchFor(snap.data(),buildIndex(jobs));if(!patch)return;
+     tx.update(ref,{...patch,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+    });
+   }));if(results.some(r=>r.status==='rejected'))failed=true;
+  }
+  if(!failed)lastSignature=signature;
+ }catch(error){failed=true;}finally{running=false;retryAfter=failed?Date.now()+30000:0;}
+}
+setInterval(sync,5000);sync();
+})();
+</script>
 
 </body>
 </html>
@@ -13875,10 +13930,10 @@ body.ops-shell #repairManagePage .rt-table-wrap{display:block!important}body.ops
  }
  window.rtFastRender=function(table,html){init(table);const temp=document.createElement('table');temp.innerHTML=html;table.tHead.innerHTML='<tr>'+temp.rows[0].innerHTML+'</tr>';const rows=[...temp.rows].slice(1);const body=$('rtFastRecordsBody');body.replaceChildren(...rows);$('rtFastAddBody').hidden=!canEdit();};
  function reset(){for(const key of Object.keys(fields)){const input=$('rtFast_'+key);if(input)input.value='';}$('rtFast_removeNote').value='';$('rtFast_status').value='🔵 已派工';$('rtFast_reportDate').value=formatDateLocal(new Date());retryRef=null;$('rtFastFeedback').textContent='新增列已清空。';}
- function fillCustomer(){const code=val('customerCode').trim().toUpperCase();const c=customers.find(c=>String(c.customerNo||'').trim().toUpperCase()===code);if(!code)return;if(!c){$('rtFastFeedback').textContent='查無此客編，可自行填寫客名、電話與地址。';return;}$('rtFast_customerCode').value=code;$('rtFast_customerName').value=c.fullName||c.shortName||c.personName||'';if($('rtFast_phone'))$('rtFast_phone').value=c.mobile||'';$('rtFast_address').value=c.deliveryAddress||'';configureMachineInput('rtFast_machineCode',code);$('rtFastFeedback').textContent='已帶入客戶資料，可自行修改。';}
+ function fillCustomer(){const code=val('customerCode').trim().toUpperCase();const c=customers.find(c=>String(c.customerNo||'').trim().toUpperCase()===code);$('rtFast_customerName').value='';$('rtFast_address').value='';if(!code)return;if(!c){$('rtFastFeedback').textContent='查無此客編；新增時將記錄客編，姓名與地址可至客戶資料補登。';return;}$('rtFast_customerCode').value=code;$('rtFast_customerName').value=c.fullName||c.shortName||c.personName||'';if($('rtFast_phone'))$('rtFast_phone').value=c.mobile||'';$('rtFast_address').value=c.deliveryAddress||'';configureMachineInput('rtFast_machineCode',code);$('rtFastFeedback').textContent='已自動帶入客戶姓名與地址，新增後顯示於下方表格。';}
  function setBusy(value){busy=value;for(const el of $('rtFastAddBody').querySelectorAll('input,select,textarea,button'))el.disabled=value;$('rtFastSave').textContent=value?'儲存中…':'＋ 新增';}
  async function save(){if(busy||!requireEdit('新增報修單'))return;if(!firebaseDb){$('rtFastFeedback').textContent='尚未連線，請登入並連線後再新增；已保留填寫內容。';return;}if(!val('reportDate')){$('rtFastFeedback').textContent='請填寫報修日期。';$('rtFast_reportDate').focus();return;}if(!val('customerCode').trim()&&!val('customerName').trim()){$('rtFastFeedback').textContent='請至少輸入客戶代號或客戶名字。';$('rtFast_customerCode').focus();return;}const invalid=[...$('rtFastAddBody').querySelectorAll('input')].find(el=>!el.checkValidity());if(invalid){invalid.reportValidity();return;}
- const data={};for(const k of Object.keys(fields))data[k]=val(k).trim();data.status=rtComputeStatus(data);data.needLoaner=val('needLoaner')==='yes';data.needNewLoaner=val('needNewLoaner')==='yes';if(val('removeNote'))data.remark='拆機：'+val('removeNote')+(data.remark?'｜'+data.remark:'');data.dispatchIds=[];data.createdBy=currentUser&&(currentUser.displayName||currentUser.email)||'';
+ fillCustomer();const data={};for(const k of Object.keys(fields))data[k]=val(k).trim();data.status=rtComputeStatus(data);data.needLoaner=val('needLoaner')==='yes';data.needNewLoaner=val('needNewLoaner')==='yes';if(val('removeNote'))data.remark='拆機：'+val('removeNote')+(data.remark?'｜'+data.remark:'');data.dispatchIds=[];data.createdBy=currentUser&&(currentUser.displayName||currentUser.email)||'';
  const code=data.customerCode,name=data.customerName;setBusy(true);$('rtFastFeedback').textContent='正在新增報修單…';try{if(!retryRef)retryRef=firebaseDb.collection('repairTickets').doc();data.createdAt=firebase.firestore.FieldValue.serverTimestamp();data.updatedAt=firebase.firestore.FieldValue.serverTimestamp();await retryRef.set(data);const id=retryRef.id;if(!repairTickets.some(t=>t.id===id))repairTickets.push({...data,id});renderRepairTicketStats();renderRepairTicketList();reset();$('rtFastFeedback').textContent='已新增 '+[code,name].filter(Boolean).join(' ')+'。若列表未顯示，請確認目前的搜尋與篩選條件。';if(data.machineCode){try{const sync=syncMachineCodeToCustomer(data.customerCode,data.customerName,data.machineCode);if(sync&&typeof sync.catch==='function')sync.catch(()=>{$('rtFastFeedback').textContent+=' 客戶機碼補登失敗，可稍後重試；報修單已新增。';});}catch(e){$('rtFastFeedback').textContent+=' 客戶機碼未補登；報修單已新增。';}}showToast('✅ 已新增報修單');}catch(e){$('rtFastFeedback').textContent='新增失敗：'+(e.message||'請稍後重試')+'；已保留全部輸入內容，可再次按新增重試。';}finally{setBusy(false);}}
  window.focusRepairQuickAdd=function(){if(!requireEdit('新增報修單'))return;renderRepairTicketList();$('rtFastAddBody').scrollIntoView({behavior:'smooth',block:'center',inline:'start'});$('rtFast_customerCode').focus({preventScroll:true});};
  const trigger=$('repairManagePage').querySelector('button[onclick="openRepairTicketDrawer()"]');if(trigger){trigger.onclick=focusRepairQuickAdd;trigger.textContent='＋ 新增報修';}
@@ -13900,7 +13955,7 @@ function moveRepairEntryOutsideTable(){
  card.innerHTML='<header class="rt-entry-header"><div><h2>新增報修</h2><p>填寫客編可自動帶入客戶資料</p></div><button type="button" id="rtEntryToggle" aria-expanded="true" aria-controls="rtFastAddBody">收合新增區</button></header>';
  const body=document.createElement('div');body.id='rtFastAddBody';body.hidden=old.hidden;body.className='rt-entry-body';const grid=document.createElement('div');grid.className='rt-entry-grid';
  const footer=document.createElement('div');footer.className='rt-entry-footer';
- function addField(label,control){const wrap=document.createElement('label');wrap.className='rt-entry-field';const key=control.dataset.rtFastKey||'';if(['phone','appointmentTime'].includes(key)){control.remove();return;}if(['address','remark'].includes(key))wrap.classList.add('rt-entry-wide');const caption=document.createElement('span');caption.textContent=label;wrap.append(caption,control);grid.append(wrap);}
+ function addField(label,control){const wrap=document.createElement('label');wrap.className='rt-entry-field';const key=control.dataset.rtFastKey||control.id.replace(/^rtFast_/,'');if(['customerName','address','handlingMethod','removeNote','returnDate','completeDate','status'].includes(key)){control.hidden=true;control.tabIndex=-1;body.append(control);return;}if(['phone','appointmentTime'].includes(key)){control.remove();return;}if(['address','remark'].includes(key))wrap.classList.add('rt-entry-wide');const caption=document.createElement('span');caption.textContent=label;wrap.append(caption,control);grid.append(wrap);}
  const main=old.querySelector('.rt-fast-main');for(const td of [...main.cells]){if(td===main.lastElementChild){while(td.firstChild)footer.append(td.firstChild);continue;}const sub=td.querySelectorAll('.rt-fast-subfield');if(sub.length){for(const label of sub){const input=label.querySelector('input,select,textarea');addField(label.firstChild?.textContent||td.dataset.label,input);}}else{const input=td.querySelector('input,select,textarea');if(input)addField(td.dataset.label,input);}}
  body.append(grid);
  const oldDetails=document.getElementById('rtFastDetails'),details=document.createElement('div');details.id='rtFastDetails';details.hidden=oldDetails.hidden;details.className='rt-entry-details';while(oldDetails.cells[0].firstChild)details.append(oldDetails.cells[0].firstChild);body.append(details);
@@ -14433,5 +14488,95 @@ body.ops-shell #rtSourceLegend:not(#scheduleCalendarView):not(#scheduleCalendarV
 
 body.ops-shell #scheduleCalendarView{font-size:13px!important}
 </style>
-<script src="repair-sync-core.js"></script>
-<script src="repair-sync.js?v=20261109-sort1"></script>
+
+<!-- 金山維修快照連動：保留原檔全部內容，內嵌以避免舊外部檔案快取。 -->
+<script id="kdocs-sync-core-inline">
+(function(root){
+  'use strict';
+  const code=v=>String(v||'').trim().toUpperCase();
+  const machine=v=>code(v).replace(/\s/g,'');
+  function period(now=new Date()){
+    const d=new Date(now.getTime()+8*3600000), y=d.getUTCFullYear(),m=d.getUTCMonth(),day=d.getUTCDate();
+    const first=new Date(Date.UTC(y,m-2,1));
+    const end=new Date(Date.UTC(first.getUTCFullYear(),first.getUTCMonth()+1,0)).getUTCDate();
+    return {today:new Date(Date.UTC(y,m,day)).toISOString().slice(0,10),start:new Date(Date.UTC(first.getUTCFullYear(),first.getUTCMonth(),Math.min(day,end))).toISOString().slice(0,10)};
+  }
+  function usable(j){return j&&!j.cancelled&&j.workflowStatus!=='cancelled'&&!j.isLeaveJob&&!j.isHold&&!(j.statusList||[]).includes('暫押')&&j.date;}
+  function jobCode(j){return code(j.customerCode||j.customerNo||String(j.codeName||'').split(/\s/)[0]);}
+  function compare(records,jobs,tickets,now){
+    const range=period(now),active=(jobs||[]).filter(usable),sources=(records||[]).filter(r=>/^(FU|Y|Z)/.test(r.customerCode));
+    const done=sources.filter(r=>r.completedDate>=range.start&&r.completedDate<=range.today);
+    const sourceCount=new Map();for(const r of sources)sourceCount.set(r.customerCode,(sourceCount.get(r.customerCode)||0)+1);
+    const restores=done.map(r=>{
+      const candidates=active.filter(j=>jobCode(j)===r.customerCode&&/復機/.test(j.workItem||'')&&j.date>=range.start&&(!r.sentDate||j.date>=r.sentDate));
+      const exact=candidates.filter(j=>machine(j.machineCode)&&machine(j.machineCode)===machine(r.machineCode));
+      const selected=exact.length?exact:candidates;
+      // Most legacy dispatches have no serial number: show possible matches, never silently close a case.
+      const uncertain=selected.length>0&&(!exact.length||sourceCount.get(r.customerCode)>1);
+      const status=!selected.length?'待安排候選':uncertain?'復機紀錄待核對':selected.some(j=>j.workflowStatus==='completed')?'已標記完成':'已安排復機';
+      return {...r,status,dispatches:selected,uncertain};
+    });
+    const tracking=sources.filter(r=>r.sentDate).map(r=>{
+      const linkedTickets=(tickets||[]).filter(t=>code(t.customerCode)===r.customerCode&&machine(t.machineCode)&&machine(t.machineCode)===machine(r.machineCode));
+      const dispatches=active.filter(j=>jobCode(j)===r.customerCode&&(/拆機|送修/.test((j.workItem||'')+' '+(j.workContent||'')))&&j.date>=range.start&&j.date<=range.today&&j.date<=r.sentDate);
+      const linked=linkedTickets.filter(t=>(t.dispatchIds||[]).length>0);
+      return {...r,status:r.completedDate?'維修完成': '送修中',linkedTickets:linked,dispatches,uncertain:!linked.length||sourceCount.get(r.customerCode)>1};
+    }).filter(r=>r.dispatches.length||r.linkedTickets.length);
+    return {range,restores,tracking};
+  }
+  root.RepairSyncCore={period,compare};
+})(typeof window==='undefined'?globalThis:window);
+
+</script>
+<script id="kdocs-sync-ui-inline">
+(function(){
+ 'use strict';
+ const ENDPOINT='https://kdocs-repair-sync.zxcv10019.workers.dev/snapshot';
+ let snapshot=null,unsubscribe=null,refreshTimer=null,container=null,busy=false,liveTickets=[];
+ const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ function ensure(){
+  if(container)return;
+  const host=document.getElementById('listPage');if(!host)return;
+  container=document.createElement('section');container.className='repair-sync-panel';
+  container.innerHTML='<h2>金山維修追蹤</h2><p>讀取最新維修快照，比對近兩個月正式派工及已安排的後續復機。無序號或同客編多機案件會保留供核對。</p><button type="button" id="repairSyncLoad">連接並讀取維修快照</button><span id="repairSyncMessage" role="status"></span><label style="display:block;margin:12px 0">排序：<select id="repairSyncSort"><option value="completed">實際完成日：舊到新</option><option value="completedDesc">實際完成日：新到舊</option><option value="customer">客編排序</option></select></label><div id="repairSyncResults"></div>';
+  host.prepend(container);document.getElementById('repairSyncLoad').onclick=()=>load(true);document.getElementById('repairSyncSort').onchange=render;
+ }
+ function message(text){const el=document.getElementById('repairSyncMessage');if(el)el.textContent=text;}
+ function rows(title,items,tracking){
+  const byCustomer=(a,b)=>String(a.customerCode||'').localeCompare(String(b.customerCode||''),'zh-TW',{numeric:true,sensitivity:'base'});
+  const byDate=(a,b)=>String(a.completedDate||'9999-12-31').localeCompare(String(b.completedDate||'9999-12-31'));
+  const mode=document.getElementById('repairSyncSort')?.value||'completed';
+  const byDateDesc=(a,b)=>!a.completedDate&&!b.completedDate?0:!a.completedDate?1:!b.completedDate?-1:String(b.completedDate).localeCompare(String(a.completedDate));
+  items=items.slice().sort((a,b)=>(mode==='customer'?byCustomer(a,b)||byDate(a,b):mode==='completedDesc'?byDateDesc(a,b)||byCustomer(a,b):byDate(a,b)||byCustomer(a,b))||String(a.recordId||'').localeCompare(String(b.recordId||'')));
+  return '<h3>'+title+'（'+items.length+' 筆）</h3><div class="repair-sync-scroll"><table><thead><tr><th>客編</th><th>機台序號</th><th>送修日</th><th>實際完成日</th><th>追蹤狀態</th><th>對照派工</th></tr></thead><tbody>'+items.map(r=>'<tr><td>'+escape(r.customerCode)+'</td><td>'+escape(r.machineCode)+'</td><td>'+escape(r.sentDate)+'</td><td>'+escape(r.completedDate)+'</td><td>'+escape(r.status)+(tracking&&r.uncertain?'（配對待核對）':'')+'</td><td>'+escape(r.dispatches.map(j=>[j.date,j.workItem,j.workContent].filter(Boolean).join(' · ')).join('\n')||'沒有符合條件的派工紀錄')+'</td></tr>').join('')+'</tbody></table></div>';
+ }
+ function render(){
+  if(!snapshot||!container)return;
+  const result=RepairSyncCore.compare(snapshot.records,typeof jobs==='undefined'?[]:jobs,liveTickets);
+  const pending=result.restores.filter(r=>r.status==='待安排候選'),review=result.restores.filter(r=>r.uncertain);
+  document.getElementById('repairSyncResults').innerHTML='<p>完成日範圍：'+result.range.start+' ～ '+result.range.today+'。快照更新：'+escape(new Date(snapshot.receivedAt).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'}))+'。掃描 '+snapshot.scanned+' 筆，快照 '+snapshot.records.length+' 筆。</p><div class="repair-sync-counts"><strong>近兩月完成 '+result.restores.length+' 筆</strong><strong>待安排候選 '+pending.length+' 筆</strong><strong>復機紀錄待核對 '+review.length+' 筆</strong></div><p>以上為維修紀錄數，可能包含同一機器多次送修。維修完成不代表現場已復機；候選清單仍需核對。比對包含已安排的未來復機，排除取消及暫押派工。</p>'+rows('待安排復機候選',pending,false)+rows('近兩月完成紀錄',result.restores,false)+rows('已派工送修追蹤',result.tracking,true);
+ }
+ async function load(interactive){
+  if(busy)return;
+  if(typeof firebaseAuth==='undefined'||!firebaseAuth?.currentUser){message('請先登入派工系統。');return;}
+  if(interactive&&!confirm('將使用目前 Firebase 登入憑證向你的 Cloudflare 接收服務驗證身分，取得金山維修快照；不傳送派工客戶資料。是否連接？'))return;
+  busy=true;message('讀取中…');
+  try{
+   const requestedUser=firebaseAuth.currentUser.uid;
+   const token=await firebaseAuth.currentUser.getIdToken();
+   const response=await fetch(ENDPOINT,{headers:{Authorization:'Bearer '+token},cache:'no-store',signal:AbortSignal.timeout(20000)});
+   if(!response.ok)throw Error(response.status===401?'尚未設定讀取帳號或登入已過期':'讀取失敗 HTTP '+response.status);
+   const data=await response.json();if(firebaseAuth.currentUser?.uid!==requestedUser)throw Error('登入帳號已變更，請重新連接');if(data.version!==1||!Array.isArray(data.records)||!data.receivedAt)throw Error('快照格式不符');
+   snapshot=data;render();message(Date.now()-Date.parse(data.receivedAt)>3*3600000?'資料已超過三小時，請查看同步日誌。':'已連接；每五分鐘檢查最新快照。');
+   if(!refreshTimer)refreshTimer=setInterval(()=>load(false),5*60000);
+   if(!unsubscribe&&typeof firebaseDb!=='undefined')unsubscribe=firebaseDb.collection('repairTickets').onSnapshot(s=>{liveTickets=s.docs.map(d=>({id:d.id,...d.data()}));render();},()=>message('報修單讀取失敗，送修追蹤可能不完整。'));
+  }catch(e){message(e.message+'；目前未更新畫面資料。');}finally{busy=false;}
+ }
+ function initialize(){ensure();if(typeof firebaseAuth!=='undefined'&&firebaseAuth)firebaseAuth.onAuthStateChanged(user=>{if(!user){snapshot=null;if(refreshTimer)clearInterval(refreshTimer);refreshTimer=null;if(unsubscribe)unsubscribe();unsubscribe=null;if(container)document.getElementById('repairSyncResults').replaceChildren();message('請先登入派工系統。');}});}
+ const style=document.createElement('style');style.textContent='.repair-sync-panel{padding:18px;margin:12px 0;background:#fff;border:1px solid #ccd8e4;border-radius:10px}.repair-sync-panel h2{font-size:19px}.repair-sync-panel p{line-height:1.6;color:#526579}.repair-sync-panel button{padding:9px 14px;border:0;border-radius:6px;background:#275f83;color:white}.repair-sync-panel [role=status]{margin:0 10px}.repair-sync-scroll{overflow:auto;max-height:420px}.repair-sync-panel table{width:100%;border-collapse:collapse;font-size:13px}.repair-sync-panel th,.repair-sync-panel td{padding:9px;border:1px solid #dce3eb;text-align:left;white-space:pre-wrap;min-width:90px}.repair-sync-panel th{background:#edf3f8;position:sticky;top:0}.repair-sync-counts{display:flex;gap:18px;flex-wrap:wrap;padding:12px 0}';document.head.append(style);
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initialize);else initialize();
+ // Existing dispatch filters re-render independently. Recompute from current in-memory jobs.
+ setInterval(()=>{if(snapshot&&container?.offsetParent)render();},30000);
+})();
+
+</script>
