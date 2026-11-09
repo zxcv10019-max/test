@@ -7,11 +7,15 @@
   if(container)return;
   const host=document.getElementById('listPage');if(!host)return;
   container=document.createElement('section');container.className='repair-sync-panel';
-  container.innerHTML='<h2>金山維修追蹤</h2><p>讀取最新維修快照，比對近兩個月正式派工及已安排的後續復機。無序號或同客編多機案件會保留供核對。</p><button type="button" id="repairSyncLoad">連接並讀取維修快照</button><span id="repairSyncMessage" role="status"></span><div id="repairSyncResults"></div>';
-  host.prepend(container);document.getElementById('repairSyncLoad').onclick=()=>load(true);
+  container.innerHTML='<h2>金山維修追蹤</h2><p>讀取最新維修快照，比對近兩個月正式派工及已安排的後續復機。無序號或同客編多機案件會保留供核對。</p><button type="button" id="repairSyncLoad">連接並讀取維修快照</button><span id="repairSyncMessage" role="status"></span><label style="display:block;margin:12px 0">排序：<select id="repairSyncSort"><option value="completed">實際完成日：舊到新</option><option value="customer">客編排序</option></select></label><div id="repairSyncResults"></div>';
+  host.prepend(container);document.getElementById('repairSyncLoad').onclick=()=>load(true);document.getElementById('repairSyncSort').onchange=render;
  }
  function message(text){const el=document.getElementById('repairSyncMessage');if(el)el.textContent=text;}
  function rows(title,items,tracking){
+  const byCustomer=(a,b)=>String(a.customerCode||'').localeCompare(String(b.customerCode||''),'zh-TW',{numeric:true,sensitivity:'base'});
+  const byDate=(a,b)=>String(a.completedDate||'9999-12-31').localeCompare(String(b.completedDate||'9999-12-31'));
+  const mode=document.getElementById('repairSyncSort')?.value||'completed';
+  items=items.slice().sort((a,b)=>(mode==='customer'?byCustomer(a,b)||byDate(a,b):byDate(a,b)||byCustomer(a,b))||String(a.recordId||'').localeCompare(String(b.recordId||'')));
   return '<h3>'+title+'（'+items.length+' 筆）</h3><div class="repair-sync-scroll"><table><thead><tr><th>客編</th><th>機台序號</th><th>送修日</th><th>實際完成日</th><th>追蹤狀態</th><th>對照派工</th></tr></thead><tbody>'+items.map(r=>'<tr><td>'+escape(r.customerCode)+'</td><td>'+escape(r.machineCode)+'</td><td>'+escape(r.sentDate)+'</td><td>'+escape(r.completedDate)+'</td><td>'+escape(r.status)+(tracking&&r.uncertain?'（配對待核對）':'')+'</td><td>'+escape(r.dispatches.map(j=>[j.date,j.workItem,j.workContent].filter(Boolean).join(' · ')).join('\n')||'沒有符合條件的派工紀錄')+'</td></tr>').join('')+'</tbody></table></div>';
  }
  function render(){
