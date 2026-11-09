@@ -2067,7 +2067,7 @@ body.force-admin-scroll #statsPage .log-table-wrap th{
     <button style="background:#0984e3" onclick="bulkRecomputeRepairStatuses()">🔄 重新計算全部狀態</button>
   </div>
 
-  <div class="rt-stats" id="rtStats"></div>
+
   <div class="summary" id="rtSummary">報修案件載入中…</div>
 
   <div class="rt-table-wrap">
@@ -11660,25 +11660,7 @@ async function linkDispatchToRepairTicket(ticketId, jobId){
 }
 
 // ===== 列表：統計卡片／表格（桌機）／卡片（手機）=====
-function renderRepairTicketStats(){
-  const box = document.getElementById("rtStats");
-  if(!box) return;
-  const curFilter = (document.getElementById("rtStatusFilter")||{}).value || "全部";
-  const counts = {};
-  RT_STATUSES.forEach(s => counts[s] = 0);
-  repairTickets.forEach(t => {
-    const s = t.completeDate ? "⚫ 已完成" : (t.status || rtComputeStatus(t));
-    if(counts[s] === undefined) counts[s] = 0;
-    counts[s]++;
-  });
-  box.innerHTML = RT_STATUSES.filter(s => s !== "⚫ 已完成").map(s => {
-    const active = curFilter === s;
-    return `<div class="rt-stat-card${active ? " active" : ""}" onclick="rtFilterByStat(${jsStr(s)})">
-      <div class="rt-stat-num">${counts[s] || 0}</div>
-      <div class="rt-stat-label">${repairEsc(s)}</div>
-    </div>`;
-  }).join("");
-}
+function renderRepairTicketStats(){ /* 統計卡片已移除。 */ }
 function rtFilterByStat(status){
   const sel = document.getElementById("rtStatusFilter");
   if(!sel) return;
@@ -13147,7 +13129,7 @@ body.ops-shell>.tabs button:not([style*="display: none"]):not([style*="display:n
   'use strict';
   const paths={home:'M3 10 12 3l9 7M5 9v12h14V9M9 21v-8h6v8',calendar:'M4 5h16v16H4zM4 10h16M8 3v4m8-4v4M8 14h2m4 0h2M8 17h2',users:'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75',list:'M9 5h12M9 12h12M9 19h12M3 5h1m-1 7h1m-1 7h1',tool:'M14.7 6.3a5 5 0 0 0-6.4 6.4L3 18l3 3 5.3-5.3a5 5 0 0 0 6.4-6.4L14 13l-3-3z',ticket:'M8 3h8v4h-8zM8 5H5v16h14V5h-3M9 11h6m-6 4h6',leave:'M12 3v2m0 14v2M3 12h2m14 0h2M5.6 5.6 7 7m10 10 1.4 1.4M5.6 18.4 7 17m10-10 1.4-1.4M16 12a4 4 0 1 0-8 0 4 4 0 0 0 8 0',water:'M12 3s-7 8-7 12a7 7 0 0 0 14 0c0-4-7-12-7-12z',stats:'M4 20V10h4v10m4 0V4h4v16m4 0V8h2v12M2 21h21',phone:'M5 3h4l2 5-3 2a15 15 0 0 0 6 6l2-3 5 2v4a2 2 0 0 1-2 2A18 18 0 0 1 3 5a2 2 0 0 1 2-2',settings:'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8M9 3h6l1 3 3 1 2 5-2 5-3 1-1 3H9l-1-3-3-1-2-5 2-5 3-1z',menu:'M4 6h16M4 12h16M4 18h16'};
   function icon(name){return '<svg class="ops-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="'+(paths[name]||paths.list)+'"></path></svg>';}
-  const pages={serviceRemovalPage:['拆機追蹤','追蹤拆機、機回與復機進度','報修管理'],serviceHistoryPage:['客戶維修歷程','依客編查詢歷次維修及派工紀錄','報修管理'],serviceContactPage:['聯繫紀錄','追蹤來電、客戶需求與後續聯繫','報修管理'],opsTaskPage:['待辦中心','集中處理報修、回訪、代工與排程衝突','工作台'],opsActivityPage:['操作紀錄','查看操作前後內容，核對後復原','系統管理'],opsOverviewPage:['工作總覽','掌握今日安排與待處理事項','工作台'],schedulePage:['派工管理','行事曆、代工與其它派工，集中安排每一天的工作','派工管理'],customerPage:['客戶資料','管理客戶聯絡資訊與設備資料','客戶服務'],listPage:['派工明細','查詢、篩選與匯出完整派工紀錄','派工管理'],repairPage:['報修案件','追蹤案件進度與維修安排','報修管理'],repairManagePage:['一般報修','統整客戶需求、附件與處理紀錄','報修管理'],leavePage:['休假管理','查看與安排工程人員休假','系統管理'],cartridgePage:['換芯名單','追蹤聯絡進度與換芯安排','客戶服務'],statsPage:['派工統計','工作量、代工件數、金額與安裝統計','統計分析'],installFollowupPage:['安裝回訪','追蹤使用狀況，記錄每一次回訪','客戶服務'],adminPage:['後台管理','權限、資料維護與系統設定','系統管理']};
+  const pages={kdocsRepairPage:['金山維修追蹤','核對金山維修完成紀錄與後續復機安排','報修管理'],serviceRemovalPage:['拆機追蹤','追蹤拆機、機回與復機進度','報修管理'],serviceHistoryPage:['客戶維修歷程','依客編查詢歷次維修及派工紀錄','報修管理'],serviceContactPage:['聯繫紀錄','追蹤來電、客戶需求與後續聯繫','報修管理'],opsTaskPage:['待辦中心','集中處理報修、回訪、代工與排程衝突','工作台'],opsActivityPage:['操作紀錄','查看操作前後內容，核對後復原','系統管理'],opsOverviewPage:['工作總覽','掌握今日安排與待處理事項','工作台'],schedulePage:['派工管理','行事曆、代工與其它派工，集中安排每一天的工作','派工管理'],customerPage:['客戶資料','管理客戶聯絡資訊與設備資料','客戶服務'],listPage:['派工明細','查詢、篩選與匯出完整派工紀錄','派工管理'],repairPage:['報修案件','追蹤案件進度與維修安排','報修管理'],repairManagePage:['一般報修','統整客戶需求、附件與處理紀錄','報修管理'],leavePage:['休假管理','查看與安排工程人員休假','系統管理'],cartridgePage:['換芯名單','追蹤聯絡進度與換芯安排','客戶服務'],statsPage:['派工統計','工作量、代工件數、金額與安裝統計','統計分析'],installFollowupPage:['安裝回訪','追蹤使用狀況，記錄每一次回訪','客戶服務'],adminPage:['後台管理','權限、資料維護與系統設定','系統管理']};
   const nav=document.querySelector('body > .tabs'),header=document.querySelector('body > .header');
   if(!nav||!header)return;
   document.body.classList.add('ops-shell');
@@ -14489,7 +14471,7 @@ body.ops-shell #rtSourceLegend:not(#scheduleCalendarView):not(#scheduleCalendarV
 body.ops-shell #scheduleCalendarView{font-size:13px!important}
 </style>
 
-<!-- 金山維修快照連動：保留原檔全部內容，內嵌以避免舊外部檔案快取。 -->
+<!-- 金山維修連動：實際完成日從上個月1號至今天。 -->
 <script id="kdocs-sync-core-inline">
 (function(root){
   'use strict';
@@ -14497,9 +14479,9 @@ body.ops-shell #scheduleCalendarView{font-size:13px!important}
   const machine=v=>code(v).replace(/\s/g,'');
   function period(now=new Date()){
     const d=new Date(now.getTime()+8*3600000), y=d.getUTCFullYear(),m=d.getUTCMonth(),day=d.getUTCDate();
-    const first=new Date(Date.UTC(y,m-2,1));
+    const first=new Date(Date.UTC(y,m-1,1));
     const end=new Date(Date.UTC(first.getUTCFullYear(),first.getUTCMonth()+1,0)).getUTCDate();
-    return {today:new Date(Date.UTC(y,m,day)).toISOString().slice(0,10),start:new Date(Date.UTC(first.getUTCFullYear(),first.getUTCMonth(),Math.min(day,end))).toISOString().slice(0,10)};
+    return {today:new Date(Date.UTC(y,m,day)).toISOString().slice(0,10),start:new Date(Date.UTC(first.getUTCFullYear(),first.getUTCMonth(),1)).toISOString().slice(0,10)};
   }
   function usable(j){return j&&!j.cancelled&&j.workflowStatus!=='cancelled'&&!j.isLeaveJob&&!j.isHold&&!(j.statusList||[]).includes('暫押')&&j.date;}
   function jobCode(j){return code(j.customerCode||j.customerNo||String(j.codeName||'').split(/\s/)[0]);}
@@ -14536,9 +14518,15 @@ body.ops-shell #scheduleCalendarView{font-size:13px!important}
  const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  function ensure(){
   if(container)return;
-  const host=document.getElementById('listPage');if(!host)return;
+  let host=document.getElementById('kdocsRepairPage');
+  if(!host){host=document.createElement('div');host.id='kdocsRepairPage';host.className='page';const list=document.getElementById('listPage');if(!list)return;list.after(host);}
+  if(!document.getElementById('tabKdocsRepair')){
+   const anchor=document.getElementById('tabRepairManage')||document.getElementById('tabList');
+   if(anchor){const button=document.createElement('button');button.type='button';button.id='tabKdocsRepair';button.innerHTML=(anchor.querySelector('svg')?.outerHTML||'')+'<span class="ops-nav-label">金山維修追蹤</span>';button.onclick=()=>window.showPage('kdocsRepairPage');anchor.after(button);}
+   const previousShow=window.showPage;window.showPage=function(id){const result=previousShow.apply(this,arguments);const button=document.getElementById('tabKdocsRepair');const active=document.getElementById('kdocsRepairPage')?.classList.contains('active');if(button){button.classList.toggle('active',!!active);if(active)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');}return result;};
+  }
   container=document.createElement('section');container.className='repair-sync-panel';
-  container.innerHTML='<h2>金山維修追蹤</h2><p>讀取最新維修快照，比對近兩個月正式派工及已安排的後續復機。無序號或同客編多機案件會保留供核對。</p><button type="button" id="repairSyncLoad">連接並讀取維修快照</button><span id="repairSyncMessage" role="status"></span><label style="display:block;margin:12px 0">排序：<select id="repairSyncSort"><option value="completed">實際完成日：舊到新</option><option value="completedDesc">實際完成日：新到舊</option><option value="customer">客編排序</option></select></label><div id="repairSyncResults"></div>';
+  container.innerHTML='<h2>金山維修追蹤</h2><p>讀取最新維修快照，比對上個月1日起的正式派工及已安排的後續復機。無序號或同客編多機案件會保留供核對。</p><button type="button" id="repairSyncLoad">連接並讀取維修快照</button><span id="repairSyncMessage" role="status"></span><label style="display:block;margin:12px 0">排序：<select id="repairSyncSort"><option value="completed">實際完成日：舊到新</option><option value="completedDesc">實際完成日：新到舊</option><option value="customer">客編排序</option></select></label><div id="repairSyncResults"></div>';
   host.prepend(container);document.getElementById('repairSyncLoad').onclick=()=>load(true);document.getElementById('repairSyncSort').onchange=render;
  }
  function message(text){const el=document.getElementById('repairSyncMessage');if(el)el.textContent=text;}
@@ -14554,7 +14542,7 @@ body.ops-shell #scheduleCalendarView{font-size:13px!important}
   if(!snapshot||!container)return;
   const result=RepairSyncCore.compare(snapshot.records,typeof jobs==='undefined'?[]:jobs,liveTickets);
   const pending=result.restores.filter(r=>r.status==='待安排候選'),review=result.restores.filter(r=>r.uncertain);
-  document.getElementById('repairSyncResults').innerHTML='<p>完成日範圍：'+result.range.start+' ～ '+result.range.today+'。快照更新：'+escape(new Date(snapshot.receivedAt).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'}))+'。掃描 '+snapshot.scanned+' 筆，快照 '+snapshot.records.length+' 筆。</p><div class="repair-sync-counts"><strong>近兩月完成 '+result.restores.length+' 筆</strong><strong>待安排候選 '+pending.length+' 筆</strong><strong>復機紀錄待核對 '+review.length+' 筆</strong></div><p>以上為維修紀錄數，可能包含同一機器多次送修。維修完成不代表現場已復機；候選清單仍需核對。比對包含已安排的未來復機，排除取消及暫押派工。</p>'+rows('待安排復機候選',pending,false)+rows('近兩月完成紀錄',result.restores,false)+rows('已派工送修追蹤',result.tracking,true);
+  document.getElementById('repairSyncResults').innerHTML='<p>完成日範圍：'+result.range.start+' ～ '+result.range.today+'。快照更新：'+escape(new Date(snapshot.receivedAt).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'}))+'。掃描 '+snapshot.scanned+' 筆，快照 '+snapshot.records.length+' 筆。</p><div class="repair-sync-counts"><strong>期間內完成 '+result.restores.length+' 筆</strong><strong>待安排候選 '+pending.length+' 筆</strong><strong>復機紀錄待核對 '+review.length+' 筆</strong></div><p>以上為維修紀錄數，可能包含同一機器多次送修。維修完成不代表現場已復機；候選清單仍需核對。比對包含已安排的未來復機，排除取消及暫押派工。</p>'+rows('待安排復機候選',pending,false)+rows('期間內完成紀錄',result.restores,false)+rows('已派工送修追蹤',result.tracking,true);
  }
  async function load(interactive){
   if(busy)return;
