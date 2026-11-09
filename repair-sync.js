@@ -12,13 +12,13 @@
  }
  function message(text){const el=document.getElementById('repairSyncMessage');if(el)el.textContent=text;}
  function rows(title,items,tracking){
-  return '<h3>'+title+'（'+items.length+' 筆）</h3><div class="repair-sync-scroll"><table><thead><tr><th>客編</th><th>機台序號</th><th>送修日</th><th>實際完成日</th><th>返回日</th><th>追蹤狀態</th><th>對照派工</th></tr></thead><tbody>'+items.map(r=>'<tr><td>'+escape(r.customerCode)+'</td><td>'+escape(r.machineCode)+'</td><td>'+escape(r.sentDate)+'</td><td>'+escape(r.completedDate)+'</td><td>'+escape(r.returnedDate)+'</td><td>'+escape(r.status)+(tracking&&r.uncertain?'（配對待核對）':'')+'</td><td>'+escape(r.dispatches.map(j=>[j.date,j.workItem,j.workContent].filter(Boolean).join(' · ')).join('\n')||'沒有符合條件的派工紀錄')+'</td></tr>').join('')+'</tbody></table></div>';
+  return '<h3>'+title+'（'+items.length+' 筆）</h3><div class="repair-sync-scroll"><table><thead><tr><th>客編</th><th>機台序號</th><th>送修日</th><th>實際完成日</th><th>追蹤狀態</th><th>對照派工</th></tr></thead><tbody>'+items.map(r=>'<tr><td>'+escape(r.customerCode)+'</td><td>'+escape(r.machineCode)+'</td><td>'+escape(r.sentDate)+'</td><td>'+escape(r.completedDate)+'</td><td>'+escape(r.status)+(tracking&&r.uncertain?'（配對待核對）':'')+'</td><td>'+escape(r.dispatches.map(j=>[j.date,j.workItem,j.workContent].filter(Boolean).join(' · ')).join('\n')||'沒有符合條件的派工紀錄')+'</td></tr>').join('')+'</tbody></table></div>';
  }
  function render(){
   if(!snapshot||!container)return;
   const result=RepairSyncCore.compare(snapshot.records,typeof jobs==='undefined'?[]:jobs,liveTickets);
   const pending=result.restores.filter(r=>r.status==='待安排候選'),review=result.restores.filter(r=>r.uncertain);
-  document.getElementById('repairSyncResults').innerHTML='<p>完成日範圍：'+result.range.start+' ～ '+result.range.today+'。快照更新：'+escape(new Date(snapshot.receivedAt).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'}))+'。掃描 '+snapshot.scanned+' 筆，快照 '+snapshot.records.length+' 筆。</p><div class="repair-sync-counts"><strong>近兩月完成 '+result.restores.length+' 筆</strong><strong>待安排候選 '+pending.length+' 筆</strong><strong>復機紀錄待核對 '+review.length+' 筆</strong></div><p>以上為維修紀錄數，可能包含同一機器多次送修。維修完成及返回日不代表現場已復機；候選清單仍需核對。比對包含已安排的未來復機，排除取消及暫押派工。</p>'+rows('待安排復機候選',pending,false)+rows('近兩月完成紀錄',result.restores,false)+rows('已派工送修追蹤',result.tracking,true);
+  document.getElementById('repairSyncResults').innerHTML='<p>完成日範圍：'+result.range.start+' ～ '+result.range.today+'。快照更新：'+escape(new Date(snapshot.receivedAt).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'}))+'。掃描 '+snapshot.scanned+' 筆，快照 '+snapshot.records.length+' 筆。</p><div class="repair-sync-counts"><strong>近兩月完成 '+result.restores.length+' 筆</strong><strong>待安排候選 '+pending.length+' 筆</strong><strong>復機紀錄待核對 '+review.length+' 筆</strong></div><p>以上為維修紀錄數，可能包含同一機器多次送修。維修完成不代表現場已復機；候選清單仍需核對。比對包含已安排的未來復機，排除取消及暫押派工。</p>'+rows('待安排復機候選',pending,false)+rows('近兩月完成紀錄',result.restores,false)+rows('已派工送修追蹤',result.tracking,true);
  }
  async function load(interactive){
   if(busy)return;
